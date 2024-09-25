@@ -1,0 +1,24 @@
+C program creation steps:
+	1. compilation (.c files -> .o files)
+	2. linking - during this step all declarations of given function are linked to the single definition. "#include" 
+	is replaced with the contents of the file the #include is pointing at
+
+1)
+
+Compile and link in single command: 
+	$ gcc hello.c -o hello
+
+Run: 
+	$ ./hello
+
+2) 
+
+Compile source files (turn ".c" source file into ".o" object file): 
+	$ gcc -c hello.c -o hello.o
+
+Link object files: 
+	$ gcc *.o -o exec
+
+Run:
+	$ ./exec
+
