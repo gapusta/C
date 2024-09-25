@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "calc.h"
+#include "calculator.h"
 
 int main(void) {
 	printf("%d\n", add(34, 35));
