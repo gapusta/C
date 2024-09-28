@@ -1,8 +1,22 @@
+#include <stdlib.h>
 #include <stdio.h>
-#include "calculator.h"
+#include "aruuke_stack.h"
 
 int main(void) {
-	printf("%d\n", add(34, 35));
+	AruukeStack arst = AruukeStackNew();
+	
+	AruukeStackPush(arst, 1);
+	AruukeStackPush(arst, 2);
+	AruukeStackPush(arst, 3);
+
+	printf("Size : %d\n", AruukeStackSize(arst));
+	printf("%d\n", AruukeStackPop(arst));
+	printf("%d\n", AruukeStackPop(arst));
+	printf("%d\n", AruukeStackPop(arst));
+	printf("Size : %d\n", AruukeStackSize(arst));
+
+	AruukeStackFree(arst);
+
 	return 0;
 }
 

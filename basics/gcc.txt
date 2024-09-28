@@ -6,7 +6,7 @@ C program creation steps:
 1)
 
 Compile and link in single command: 
-	$ gcc hello.c -o hello
+	$ gcc -std=c99 hello.c -o hello
 
 Run: 
 	$ ./hello
@@ -14,10 +14,10 @@ Run:
 2) 
 
 Compile source files (turn ".c" source file into ".o" object file): 
-	$ gcc -c hello.c -o hello.o
+	$ gcc -std=c99 -c hello.c -o hello.o
 
 Link object files: 
-	$ gcc *.o -o exec
+	$ gcc -std=c99 *.o -o exec
 
 Run:
 	$ ./exec
