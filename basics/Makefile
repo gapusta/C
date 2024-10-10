@@ -4,9 +4,7 @@ exe: main.c aruuke_stack.c
 	gcc *.o -o exe
 	rm *.o
 
-clear_obj:
-	rm *.o
-
+.PHONY: clean
 clean: 
 	rm exe
 
