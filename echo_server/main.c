@@ -48,36 +48,39 @@ int main(void) {
 	printf("Listening...\n");
 
 	// 3. listen for incoming connections
-	listen(sockfd, 5); // marks  the  socket  referred  to by sockfd as a passive socket, that is, as a socket that will be used to accept incoming connection requests using accept(2)
+	listen(sockfd, 5); // marks the socket sockfd as a socket that will be used to accept incoming connection requests using accept(2)
 	
 	printf("Accepting...\n");
 	
 	clilen = sizeof(cli_addr);
-	newsockfd = accept(
-		sockfd,
-		(struct sockaddr *) &cli_addr, 
-                &clilen		
-	);
-
+	newsockfd = accept(sockfd,(struct sockaddr *) &cli_addr, &clilen);
 	if (newsockfd < 0) { 
 		error("ERROR on accept"); 
 	}
 
-	bzero(buffer, 256);
+	while(1) {
+		bzero(buffer, 256);
 
-	n = read(newsockfd, buffer, 256);
+		n = read(newsockfd, buffer, 256);
 
-	if (n < 0) { 
-		error("ERROR reading from socket");
-	}
-    
-        buffer[n] = '\0';	
-	printf("Here is the message: %s\n", buffer);
+		if (n < 0) { 
+			error("ERROR reading from socket");
+		}
+
+		if (n == 0) { // EOF from client (FIN)
+			shutdown(newsockfd, SHUT_WR);
+			break;
+		}
+
+        	buffer[n] = '\0';
+
+		printf("Here is the message: %s\n", buffer);
      
-	n = write(newsockfd, "I got your message", 18);
+		n = write(newsockfd, buffer, n);
      
-	if (n < 0) {
-		error("ERROR writing to socket");
+		if (n < 0) {
+			error("ERROR writing to socket");
+		}
 	}
      
 	close(newsockfd);
