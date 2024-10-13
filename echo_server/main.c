@@ -75,8 +75,11 @@ int main(void) {
         	buffer[n] = '\0';
 
 		printf("Here is the message: %s\n", buffer);
-     
-		n = write(newsockfd, buffer, n);
+    
+		while (n > 0) {
+			int read = write(newsockfd, buffer, n);
+			n = n - read;
+		}
      
 		if (n < 0) {
 			error("ERROR writing to socket");
