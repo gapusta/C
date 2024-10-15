@@ -6,10 +6,23 @@
 #include <sys/socket.h> 
 #include <netinet/in.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/epoll.h>
 
 void error(const char *msg) {
     perror(msg);
     exit(1);
+}
+
+void set_nonblocking(int fd) {
+  int flags = fcntl(fd, F_GETFL, 0);
+  if (flags == -1) {
+    perror("fcntl()");
+    return;
+  }
+  if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+    perror("fcntl()");
+  }
 }
 
 // AF_INET - IPv4 protocol
@@ -58,32 +71,69 @@ int main(void) {
 		error("ERROR on accept"); 
 	}
 
+
+	set_nonblocking(newsockfd);
+
+	// create the epoll
+  	int epoll_fd = epoll_create1(0);
+  	if (epoll_fd == -1) {
+  		error("ERROR on epoll_create1");
+  	}
+
+	// register client socket with epoll 
+	struct epoll_event event;
+  	
+	bzero((char*) &event, sizeof(event));
+
+	event.data.fd = newsockfd;
+  	event.events = EPOLLIN | EPOLLOUT | EPOLLET;
+  	if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock, &event) == -1) {
+  		error("ERROR on epoll_ctl");
+	}
+
+	struct epoll_event *events = calloc(64, sizeof(event));
 	while(1) {
-		bzero(buffer, 256);
+		int newevents = epoll_wait(epoll_fd, events, 64, -1);
+		if (nevents == -1) {
+      			error("ERROR on epoll_wait()");
+    		}
 
-		n = read(newsockfd, buffer, 256);
+		for (int i = 0; i < newevents; i++) {
+			if (events[i].events & EPOLLIN) {
+				// read event fired
+				bzero(buffer, 256);
 
-		if (n < 0) { 
-			error("ERROR reading from socket");
-		}
+				n = read(newsockfd, buffer, 256);
 
-		if (n == 0) { // EOF from client (FIN)
-			shutdown(newsockfd, SHUT_WR);
-			break;
-		}
+				if (n < 0) { 
+					error("ERROR reading from socket");
+				}
 
-        	buffer[n] = '\0';
+				if (n == 0) { // EOF from client (FIN)
+					shutdown(newsockfd, SHUT_WR);
+					break;
+				}
 
-		printf("Here is the message: %s\n", buffer);
+        			buffer[n] = '\0';
+
+				printf("Here is the message: %s\n", buffer);
     
-		while (n > 0) {
-			int read = write(newsockfd, buffer, n);
-			n = n - read;
-		}
+				while (n > 0) {
+					int read = write(newsockfd, buffer, n);
+					n = n - read;
+				}
      
-		if (n < 0) {
-			error("ERROR writing to socket");
+				if (n < 0) {
+					error("ERROR writing to socket");
+				}
+			}
+			if (events[i].events & EPOLLOUT) {
+				// write event fired
+			
+			}	
 		}
+
+		
 	}
      
 	close(newsockfd);
