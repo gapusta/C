@@ -35,3 +35,4 @@ char* rchk_ssr_str(rchk_ssr* ssr);
 int rchk_ssr_free(rchk_ssr* ssr);
 
 #endif
+
