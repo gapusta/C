@@ -8,6 +8,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
+#include <errno.h>
+#include "archke_simple_string_reader.h"
+
+#define PORT 9999
+#define MAXEVENTS 64 
 
 void error(const char *msg) {
     perror(msg);
@@ -15,129 +20,137 @@ void error(const char *msg) {
 }
 
 void set_nonblocking(int fd) {
-  int flags = fcntl(fd, F_GETFL, 0);
-  if (flags == -1) {
-    perror("fcntl()");
-    return;
-  }
-  if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-    perror("fcntl()");
-  }
+  	int flags = fcntl(fd, F_GETFL, 0);
+	
+	if (flags == -1) {
+		error("fcntl() get flags error");    
+  	}
+
+  	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+    		error("fcntl() set flags error");
+  	}
 }
 
 // AF_INET - IPv4 protocol
 // SOCK_STREAM - Provides sequenced, reliable, two-way, connection-based byte streams.  An out-of-band data transmission mechanism may be supported.	
 int main(void) {
-	int sockfd;
-	int newsockfd;
-        int portno = 9999;
-        int clilen;
-	int n;
+	int server_sock_fd;
+	rchk_ssr* reader;
 
-	char buffer[256];
-
-	struct sockaddr_in serv_addr; // will contain the address of the server
-       	struct sockaddr_in cli_addr; // will contain the address of the client which connects to the server
-
-	printf("Creating socket...\n");
-
-	// 1. socket creation
-	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+	// create server socket
+	printf("Creating server socket...\n");
+	if ((server_sock_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		error("socket() error");
 	}
 
-	bzero((char*) &serv_addr, sizeof(serv_addr));
-
-	printf("Binding socket...\n");
-
-	// 2. binding socket to address
-	serv_addr.sin_family = AF_INET;
-     	serv_addr.sin_addr.s_addr = INADDR_ANY;
-     	serv_addr.sin_port = htons(portno);
-	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+	// bind server socket to address/port
+	printf("Binding server socket...\n");
+	struct sockaddr_in server_address; // will contain the address of the server
+	bzero((char*) &server_address, sizeof(server_address));
+	server_address.sin_family = AF_INET;
+     	server_address.sin_addr.s_addr = INADDR_ANY;
+     	server_address.sin_port = htons(PORT);
+	if (bind(server_sock_fd, (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
 		error("bind() error");
 	}
 
-	printf("Listening...\n");
+	// make server socket nonblocking
+	set_nonblocking(server_sock_fd);
 
-	// 3. listen for incoming connections
-	listen(sockfd, 5); // marks the socket sockfd as a socket that will be used to accept incoming connection requests using accept(2)
-	
-	printf("Accepting...\n");
-	
-	clilen = sizeof(cli_addr);
-	newsockfd = accept(sockfd,(struct sockaddr *) &cli_addr, &clilen);
-	if (newsockfd < 0) { 
-		error("ERROR on accept"); 
+	// mark server as "listener"
+	printf("Making server socket as listener...\n");
+	if (listen(server_sock_fd, SOMAXCONN) < 0) { // the server socket will be used to accept incoming connection requests using accept(2)
+		error("listen() error");
 	}
-
-
-	set_nonblocking(newsockfd);
 
 	// create the epoll
   	int epoll_fd = epoll_create1(0);
   	if (epoll_fd == -1) {
-  		error("ERROR on epoll_create1");
+  		error("epoll_create1() error");
   	}
 
-	// register client socket with epoll 
-	struct epoll_event event;
-  	
-	bzero((char*) &event, sizeof(event));
-
-	event.data.fd = newsockfd;
-  	event.events = EPOLLIN | EPOLLOUT | EPOLLET;
-  	if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock, &event) == -1) {
-  		error("ERROR on epoll_ctl");
+	// mark server socket for reading, and become edge-triggered
+	struct epoll_event server_event; 
+	bzero((char*) &server_event, sizeof(server_event));
+	server_event.data.fd = server_sock_fd;
+	server_event.events = EPOLLIN | EPOLLET;
+	if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_sock_fd, &server_event) == -1) {
+		error("epoll_ctl() error");
 	}
 
-	struct epoll_event *events = calloc(64, sizeof(event));
-	while(1) {
-		int newevents = epoll_wait(epoll_fd, events, 64, -1);
+	struct epoll_event* events = calloc(MAXEVENTS, sizeof(server_event));
+	for(;;) {
+		// wait for events to come/happen
+		int nevents = epoll_wait(epoll_fd, events, MAXEVENTS, -1);
 		if (nevents == -1) {
-      			error("ERROR on epoll_wait()");
-    		}
+			error("epoll_wait() error");
+		}		
+		for (int i=0; i<nevents; i++) {
+			if ((events[i].events & EPOLLERR) || (events[i].events & EPOLLHUP) || (!(events[i].events & EPOLLIN))) {
+				// error case
+				fprintf(stderr, "epoll error\n");
+        			close(events[i].data.fd);
+        			continue;
+			}
+			else if (events[i].data.fd == server_sock_fd) {
+				// server socket; call accept as many times as we can
+				for (;;) {
+					struct sockaddr client_address;
+					socklen_t client_address_len = sizeof(client_address);
 
-		for (int i = 0; i < newevents; i++) {
-			if (events[i].events & EPOLLIN) {
-				// read event fired
-				bzero(buffer, 256);
+					int client_sock_fd = accept(server_sock_fd, &client_address, &client_address_len);
 
-				n = read(newsockfd, buffer, 256);
+					if (client_sock_fd == -1) {
+						if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          					    	// we processed all of the connections
+          					    	break;
+          					} else {
+							error("accept() error");
+          					}
+					}
+					else {
+						printf("Accepted new connection on fd %d ...\n", client_sock_fd);
+						
+						set_nonblocking(client_sock_fd);
 
-				if (n < 0) { 
-					error("ERROR reading from socket");
-				}
-
-				if (n == 0) { // EOF from client (FIN)
-					shutdown(newsockfd, SHUT_WR);
-					break;
-				}
-
-        			buffer[n] = '\0';
-
-				printf("Here is the message: %s\n", buffer);
-    
-				while (n > 0) {
-					int read = write(newsockfd, buffer, n);
-					n = n - read;
-				}
-     
-				if (n < 0) {
-					error("ERROR writing to socket");
+						struct epoll_event event;
+						bzero((char*) &event, sizeof(event));
+						event.data.fd = client_sock_fd;
+						event.events = EPOLLIN | EPOLLET;
+						if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_sock_fd, &event) == -1) {
+                					error("epoll_ctl() error");
+        					}			
+					}
 				}
 			}
-			if (events[i].events & EPOLLOUT) {
-				// write event fired
-			
+		        else {
+				printf("Reading client input data..\n");
+				// client socket; read as much data as we can
+				char buf[1024];
+        			for (;;) {
+        			 	ssize_t nbytes = read(events[i].data.fd, buf, sizeof(buf));
+        			 	if (nbytes == -1) {
+        			 	  	if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        			 	  	  	printf("Finished reading data from client...\n");
+        			 	  	  	break;
+        			 	  	} else {
+							error("read() error");
+        			 	  	}
+        			 	} else if (nbytes == 0) {
+        			 	  	printf("Finished with %d\n", events[i].data.fd);
+						shutdown(events[i].data.fd, SHUT_WR);
+        			 	  	close(events[i].data.fd);
+        			 	  	break;
+        			 	} else {
+        			 	  	buf[nbytes] = '\0';
+						printf("Result : %s\n", buf);
+        			 	}
+        			}
 			}	
 		}
-
-		
 	}
      
-	close(newsockfd);
-     	close(sockfd);
+     	close(server_sock_fd);
 
 	printf("Sockets closed...\n");
      
