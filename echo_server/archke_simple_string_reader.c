@@ -1,19 +1,29 @@
 #include <stdlib.h>
+#include <string.h>
 #include "archke_simple_string_reader.h"
 
 rchk_ssr* rchk_ssr_new(int buffer_size, rchk_ssr_status* status) {
-	rchk_ssr* new = (rchk_ssr*) malloc(sizeof(rchk_ssr) + (buffer_size + 1)); // '1' is for '\0'
+	rchk_ssr* new = (rchk_ssr*) malloc(sizeof(rchk_ssr) + buffer_size); // '1' is for '\0'
 	if (new == NULL) {
 		status->code = 1;
 		return NULL;
 	}
 
+	bzero(new, sizeof(rchk_ssr) + buffer_size);
+
 	new->state = rchk_ssr_start;
 	new->idx = 0;
 	new->str = (char*) (new + sizeof(rchk_ssr));
+	new->max_str_size = buffer_size;
 	status->code = 0;
 	
 	return new;	
+}
+
+void rchk_ssr_clear(rchk_ssr* ssr) {
+	ssr->state = rchk_ssr_start;
+	ssr->idx = 0;
+	bzero(ssr->str, ssr->max_str_size);
 }
 
 int rchk_ssr_process(rchk_ssr* ssr, char* chunk, int occupied, rchk_ssr_status* status) {
@@ -51,9 +61,9 @@ int rchk_ssr_process(rchk_ssr* ssr, char* chunk, int occupied, rchk_ssr_status* 
 	return 0;	
 }
 
-int rchk_sst_done(rchk_ssr* ssr) { return ssr->state == rchk_ssr_done; }
+int rchk_ssr_is_done(rchk_ssr* ssr) { return ssr->state == rchk_ssr_done; }
 
 char* rchk_ssr_str(rchk_ssr* ssr) { return ssr->str; }
 
-int rchk_ssr_free(rchk_ssr* ssr) { free(ssr); }
+void rchk_ssr_free(rchk_ssr* ssr) { free(ssr); }
 

@@ -14,6 +14,13 @@
 #define PORT 9999
 #define MAXEVENTS 64 
 
+struct client {
+	int fd;
+	rchk_ssr* reader;
+};
+
+typedef struct client client;
+
 void error(const char *msg) {
     perror(msg);
     exit(1);
@@ -31,11 +38,36 @@ void set_nonblocking(int fd) {
   	}
 }
 
+void register_in_epoll(int epoll_fd, int client_sock_fd) {
+ 	struct epoll_event event;
+
+	bzero((char*) &event, sizeof(event));
+ 	
+ 	// initialize reader
+	rchk_ssr_status status;
+	rchk_ssr* reader = rchk_ssr_new(1024, &status);
+
+	// initialize client data
+	client* c = malloc(sizeof(client));
+	c->fd = client_sock_fd;
+	c->reader = reader;
+
+	// initialize event subscription
+	event.events = EPOLLIN | EPOLLET; // read event + edge-triggered mode
+	event.data.ptr = c;	
+
+	// registration in epoll
+	int reg_result = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_sock_fd, &event);  
+ 	
+	if (reg_result == -1) {
+ 		error("epoll_ctl() error");
+ 	}
+}
+
 // AF_INET - IPv4 protocol
 // SOCK_STREAM - Provides sequenced, reliable, two-way, connection-based byte streams.  An out-of-band data transmission mechanism may be supported.	
 int main(void) {
 	int server_sock_fd;
-	rchk_ssr* reader;
 
 	// create server socket
 	printf("Creating server socket...\n");
@@ -82,17 +114,22 @@ int main(void) {
 	for(;;) {
 		// wait for events to come/happen
 		int nevents = epoll_wait(epoll_fd, events, MAXEVENTS, -1);
+		
 		if (nevents == -1) {
 			error("epoll_wait() error");
 		}		
+		
 		for (int i=0; i<nevents; i++) {
+			client* c = (client*) events[i].data.ptr;
+
 			if ((events[i].events & EPOLLERR) || (events[i].events & EPOLLHUP) || (!(events[i].events & EPOLLIN))) {
 				// error case
 				fprintf(stderr, "epoll error\n");
-        			close(events[i].data.fd);
+        			close(c->fd);
         			continue;
 			}
-			else if (events[i].data.fd == server_sock_fd) {
+			
+			if (events[i].data.fd == server_sock_fd) {
 				// server socket; call accept as many times as we can
 				for (;;) {
 					struct sockaddr client_address;
@@ -100,51 +137,56 @@ int main(void) {
 
 					int client_sock_fd = accept(server_sock_fd, &client_address, &client_address_len);
 
-					if (client_sock_fd == -1) {
-						if (errno == EAGAIN || errno == EWOULDBLOCK) {
-          					    	// we processed all of the connections
-          					    	break;
-          					} else {
-							error("accept() error");
-          					}
-					}
-					else {
+					if (client_sock_fd != -1) {
 						printf("Accepted new connection on fd %d ...\n", client_sock_fd);
 						
 						set_nonblocking(client_sock_fd);
 
-						struct epoll_event event;
-						bzero((char*) &event, sizeof(event));
-						event.data.fd = client_sock_fd;
-						event.events = EPOLLIN | EPOLLET;
-						if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_sock_fd, &event) == -1) {
-                					error("epoll_ctl() error");
-        					}			
+						register_in_epoll(epoll_fd, client_sock_fd);
+					} else if (errno == EAGAIN || errno == EWOULDBLOCK){
+          				    	// we processed all of pending connections
+          				    	break;
+					} else {
+						error("accept() error");
 					}
 				}
 			}
 		        else {
 				printf("Reading client input data..\n");
 				// client socket; read as much data as we can
-				char buf[1024];
+				char chunk[256];
         			for (;;) {
-        			 	ssize_t nbytes = read(events[i].data.fd, buf, sizeof(buf));
-        			 	if (nbytes == -1) {
-        			 	  	if (errno == EAGAIN || errno == EWOULDBLOCK) {
+					// printf("fd : %d\n", c->fd);
+        			 	ssize_t nbytes = read(c->fd, chunk, sizeof(chunk));
+
+					if (nbytes > 0) {	
+						rchk_ssr* reader = c->reader;
+						rchk_ssr_status status;
+
+						rchk_ssr_process(reader, chunk, nbytes, &status);
+
+						if (rchk_ssr_is_done(reader)) {
+							printf("Client %d : %s\n", c->fd, rchk_ssr_str(reader));
+							rchk_ssr_clear(reader);
+						}
+					} else if (nbytes == 0) {
+						printf("Finished with %d\n", c->fd);
+
+						shutdown(c->fd, SHUT_WR);
+						close(c->fd);
+
+						rchk_ssr_free(c->reader);
+						free(c);
+        			 	  	
+						break;
+					} else if (nbytes == -1) {
+						if (errno == EAGAIN || errno == EWOULDBLOCK) {
         			 	  	  	printf("Finished reading data from client...\n");
         			 	  	  	break;
         			 	  	} else {
 							error("read() error");
         			 	  	}
-        			 	} else if (nbytes == 0) {
-        			 	  	printf("Finished with %d\n", events[i].data.fd);
-						shutdown(events[i].data.fd, SHUT_WR);
-        			 	  	close(events[i].data.fd);
-        			 	  	break;
-        			 	} else {
-        			 	  	buf[nbytes] = '\0';
-						printf("Result : %s\n", buf);
-        			 	}
+					}
         			}
 			}	
 		}

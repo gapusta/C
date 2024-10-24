@@ -1,8 +1,8 @@
 
-exe: main.c
-	gcc -c main.c
-	gcc main.o -o exe
-	rm main.o
+exe: main.c archke_simple_string_reader.c
+	gcc -Wall -c $^
+	gcc *.o -o exe
+	rm *.o
 
 .PHONY: clean
 clean:

@@ -10,6 +10,7 @@ enum rchk_ssr_state { // Archke simple string reader states
 struct rchk_ssr { // Archke simple string reader 
 	enum rchk_ssr_state state;
 	int idx;
+	int max_str_size;
 	char* str;
 };
 
@@ -28,11 +29,13 @@ rchk_ssr* rchk_ssr_new(int buffer_size, rchk_ssr_status* status);
 
 int rchk_ssr_process(rchk_ssr* ssr, char* chunk, int occupied, rchk_ssr_status* status);
 
-int rchk_sst_done(rchk_ssr* ssr);
+void rchk_ssr_clear(rchk_ssr* ssr);
+
+int rchk_ssr_is_done(rchk_ssr* ssr);
 
 char* rchk_ssr_str(rchk_ssr* ssr);
 
-int rchk_ssr_free(rchk_ssr* ssr);
+void rchk_ssr_free(rchk_ssr* ssr);
 
 #endif
 
