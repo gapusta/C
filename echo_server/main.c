@@ -64,6 +64,16 @@ void register_in_epoll(int epoll_fd, int client_sock_fd) {
  	}
 }
 
+void print_raw_simple_string(char* chunk, int bytes) {
+	printf("Chunk : ");
+	for (int i=0; i<bytes; i++) {
+		if (chunk[i] == '\r') { printf("%s", "\\r"); }
+		else if (chunk[i] == '\n') { printf("%s", "\\n"); }
+		else { printf("%c", chunk[i]); }
+	}
+	printf("\n");
+}
+
 // AF_INET - IPv4 protocol
 // SOCK_STREAM - Provides sequenced, reliable, two-way, connection-based byte streams.  An out-of-band data transmission mechanism may be supported.	
 int main(void) {
@@ -113,6 +123,7 @@ int main(void) {
 	struct epoll_event* events = calloc(MAXEVENTS, sizeof(server_event));
 	for(;;) {
 		// wait for events to come/happen
+		printf("Waiting...\n");
 		int nevents = epoll_wait(epoll_fd, events, MAXEVENTS, -1);
 		
 		if (nevents == -1) {
@@ -141,8 +152,10 @@ int main(void) {
 						printf("Accepted new connection on fd %d ...\n", client_sock_fd);
 						
 						set_nonblocking(client_sock_fd);
+						printf("Set %d as non-blockin...\n", client_sock_fd);
 
 						register_in_epoll(epoll_fd, client_sock_fd);
+						printf("Registered %d in epoll...\n", client_sock_fd);
 					} else if (errno == EAGAIN || errno == EWOULDBLOCK){
           				    	// we processed all of pending connections
           				    	break;
@@ -160,17 +173,17 @@ int main(void) {
         			 	ssize_t nbytes = read(c->fd, chunk, sizeof(chunk));
 
 					if (nbytes > 0) {	
-						rchk_ssr* reader = c->reader;
+						// print_raw_simple_string(chunk, nbytes);
+
 						rchk_ssr_status status;
+						rchk_ssr_process(c->reader, chunk, nbytes, &status);
 
-						rchk_ssr_process(reader, chunk, nbytes, &status);
-
-						if (rchk_ssr_is_done(reader)) {
-							printf("Client %d : %s\n", c->fd, rchk_ssr_str(reader));
-							rchk_ssr_clear(reader);
+						if (rchk_ssr_is_done(c->reader)) {
+							printf("Client %d : %s\n", c->fd, rchk_ssr_str(c->reader));
+							rchk_ssr_clear(c->reader);
 						}
 					} else if (nbytes == 0) {
-						printf("Finished with %d\n", c->fd);
+						printf("Client %d : exited\n", c->fd);
 
 						shutdown(c->fd, SHUT_WR);
 						close(c->fd);
@@ -181,7 +194,7 @@ int main(void) {
 						break;
 					} else if (nbytes == -1) {
 						if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        			 	  	  	printf("Finished reading data from client...\n");
+        			 	  	  	printf("Finished reading data from client\n");
         			 	  	  	break;
         			 	  	} else {
 							error("read() error");

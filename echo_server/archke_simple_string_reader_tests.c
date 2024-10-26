@@ -104,10 +104,45 @@ void test4() {
 	printf("Test #4 passed\n");
 }
 
+// 'clear' operation test
+void test5() {
+	char* input1 = "+hello\r\n";
+        char* expected1 = "hello";	
+	
+	char* input2 = "+hey\r\n";
+        char* expected2 = "hey";
+
+	rchk_ssr_status status = { .code = 0 };
+
+	rchk_ssr* reader = rchk_ssr_new(BUFFER_SIZE, &status);
+
+	rchk_ssr_process(reader, input1, strlen(input1), &status);
+	char* result = rchk_ssr_str(reader);
+	if (strcmp(result, expected1) != 0) {
+		printf("Test #5 failed\n");
+		exit(-1);
+	}
+
+	rchk_ssr_clear(reader);
+
+	status.code = 0;
+	rchk_ssr_process(reader, input2, strlen(input2), &status);
+	result = rchk_ssr_str(reader);
+	if (strcmp(result, expected2) != 0) {
+		printf("Test #5 failed\n");
+		exit(-1);
+	}
+
+	rchk_ssr_free(reader);
+	
+	printf("Test #5 passed\n");
+}
+
 int main(void) {
 	test1();
 	test2();
 	test3();
-	test4();	
+	test4();
+	test5();
 }
 

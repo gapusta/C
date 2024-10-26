@@ -14,6 +14,7 @@ rchk_ssr* rchk_ssr_new(int buffer_size, rchk_ssr_status* status) {
 	new->state = rchk_ssr_start;
 	new->idx = 0;
 	new->str = (char*) (new + sizeof(rchk_ssr));
+	new->str[0] = '\0';
 	new->max_str_size = buffer_size;
 	status->code = 0;
 	
@@ -23,7 +24,7 @@ rchk_ssr* rchk_ssr_new(int buffer_size, rchk_ssr_status* status) {
 void rchk_ssr_clear(rchk_ssr* ssr) {
 	ssr->state = rchk_ssr_start;
 	ssr->idx = 0;
-	bzero(ssr->str, ssr->max_str_size);
+	ssr->str[0] = '\0';	
 }
 
 int rchk_ssr_process(rchk_ssr* ssr, char* chunk, int occupied, rchk_ssr_status* status) {
