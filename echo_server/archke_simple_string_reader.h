@@ -1,5 +1,5 @@
 #ifndef ARCHKE_SIMPLE_STRING_READER
-#define ARCHKE_SIMPLE_STRING_READRE
+#define ARCHKE_SIMPLE_STRING_READER
 
 enum rchk_ssr_state { // Archke simple string reader states
 	rchk_ssr_start,
@@ -34,6 +34,8 @@ void rchk_ssr_clear(rchk_ssr* ssr);
 int rchk_ssr_is_done(rchk_ssr* ssr);
 
 char* rchk_ssr_str(rchk_ssr* ssr);
+
+int rchk_ssr_str_size(rchk_ssr* ssr);
 
 void rchk_ssr_free(rchk_ssr* ssr);
 

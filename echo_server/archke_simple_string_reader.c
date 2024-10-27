@@ -66,5 +66,7 @@ int rchk_ssr_is_done(rchk_ssr* ssr) { return ssr->state == rchk_ssr_done; }
 
 char* rchk_ssr_str(rchk_ssr* ssr) { return ssr->str; }
 
+int rchk_ssr_str_size(rchk_ssr* ssr) { return ssr->idx; }
+
 void rchk_ssr_free(rchk_ssr* ssr) { free(ssr); }
 

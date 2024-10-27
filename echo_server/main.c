@@ -27,6 +27,14 @@ void error(const char *msg) {
     exit(1);
 }
 
+int min(int x, int y) {
+	if (x < y) {
+		return x;
+	} else {
+		return y;
+	}
+}
+
 void set_nonblocking(int fd) {
   	int flags = fcntl(fd, F_GETFL, 0);
 	
@@ -65,7 +73,7 @@ void register_in_epoll(int epoll_fd, int client_sock_fd) {
 	c->sent = 0;
 
 	// initialize event subscription : EPOLLIN = read event, EPOLLET = edge-triggered mode
-	set_interests(epoll_fd, c, EPOLLIN | EPOLLET); 	
+	set_interests(epoll_fd, c, EPOLLIN | EPOLLOUT | EPOLLET);
 }
 
 void print_raw_simple_string(char* chunk, int bytes) {
@@ -167,49 +175,104 @@ int main(void) {
 						error("accept() error");
 					}
 				}
+				continue;
 			}
-		        else {
-				printf("Client socket read/write...\n");
-				char chunk[256];
-        			for (;;) {	
-					// read as much data as we can
-					ssize_t nbytes = read(c->fd, chunk, sizeof(chunk));
 
-					if (nbytes > 0) {	
-						rchk_ssr_status status;
-						rchk_ssr_process(c->reader, chunk, nbytes, &status);
+			if (events[i].events & EPOLLIN) {
+     				char chunk[256];
+					for (;;) {
+						// read as much data as we can
+						ssize_t nbytes = read(c->fd, chunk, sizeof(chunk));
 
-						if (rchk_ssr_is_done(c->reader)) {
-							printf("Client %d : %s\n", c->fd, rchk_ssr_str(c->reader));
-							rchk_ssr_clear(c->reader);
-							// change event interests from read to write
+						if (nbytes > 0) {
+							rchk_ssr_status status;
+							rchk_ssr_process(c->reader, chunk, nbytes, &status);
 
+							if (rchk_ssr_is_done(c->reader)) {
+								printf("Client %d : %s\n", c->fd, rchk_ssr_str(c->reader));
+								// set_interests(epoll_fd, c, EPOLLOUT | EPOLLET);
+							}
+						} else if (nbytes == 0) {
+							printf("Client %d : exited\n", c->fd);
+
+							shutdown(c->fd, SHUT_WR);
+							close(c->fd);
+
+							rchk_ssr_free(c->reader);
+							free(c);
+
+							break;
+						} else if (nbytes == -1) {
+							if (errno == EAGAIN || errno == EWOULDBLOCK) {
+								printf("Finished reading data from client\n");
+								break;
+							} else {
+								error("read() error");
+							}
 						}
-					} else if (nbytes == 0) {
-						printf("Client %d : exited\n", c->fd);
+  					}
+			}
 
-						shutdown(c->fd, SHUT_WR);
-						close(c->fd);
+			if (events[i].events & EPOLLOUT && rchk_ssr_is_done(c->reader)) {
+     			int chunk_size = 256;
+     			char chunk[chunk_size];
+				for (;;) {
+						// write as much data as we can
+						int str_size = rchk_ssr_str_size(c->reader);
+						int idx = 0;
+						int prefix_size = 0;
+						int payload_size = 0;
+						int suffix_size = 0;
 
-						rchk_ssr_free(c->reader);
-						free(c);
-        				  	
-						break;
-					} else if (nbytes == -1) {
-						if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        				  	  	printf("Finished reading data from client\n");
-        				  	  	break;
-        				  	} else {
-							error("read() error");
-        				  	}
-					}		
-        			
-        			}
-			}	
-		}
+						// 1. compute and set message prefix if needed
+						if (c->sent < 1) {
+							chunk[idx++] = '+';
+							prefix_size = 1;
+						}
+
+						// 2. copy message part to buffer
+						int remaining = str_size - c->sent;
+						payload_size = min(remaining, chunk_size - prefix_size);
+
+						for (int pidx=0; pidx < payload_size; pidx++, idx++) {
+							chunk[idx] = c->reader->str[c->sent + pidx];
+						}
+
+						// 3. deal with suffix ('\r' and '\n')
+						if (c->sent < str_size + 2 && idx < chunk_size) {
+							chunk[idx++] = '\r';
+							suffix_size++;
+						}
+
+						if (c->sent < str_size + 3 && idx < chunk_size) {
+							chunk[idx++] = '\n';
+							suffix_size++;
+						}
+
+						// send data
+						ssize_t nbytes = write(c->fd, chunk, prefix_size + payload_size + suffix_size);
+
+						if (nbytes >= 0) {
+							c->sent = c->sent + nbytes;
+							if (c->sent == str_size + 3) {
+								// all the data has been sent
+								c->sent = 0;
+								rchk_ssr_clear(c->reader);
+							}
+						} else {
+							if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        					  	  	printf("Finished writing data to client\n");
+        					  	  	break;
+        					  	} else {
+								error("read() error");
+        					  	}
+						}
+					}
+				}
+			}
 	}
      
-     	close(server_sock_fd);
+	close(server_sock_fd);
 
 	printf("Sockets closed...\n");
      
