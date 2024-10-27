@@ -15,7 +15,7 @@ rchk_ssr* rchk_ssr_new(int buffer_size, rchk_ssr_status* status) {
 	new->idx = 0;
 	new->str = (char*) (new + sizeof(rchk_ssr));
 	new->str[0] = '\0';
-	new->max_str_size = buffer_size;
+	new->max = buffer_size;
 	status->code = 0;
 	
 	return new;	

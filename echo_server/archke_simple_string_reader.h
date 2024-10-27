@@ -10,7 +10,7 @@ enum rchk_ssr_state { // Archke simple string reader states
 struct rchk_ssr { // Archke simple string reader 
 	enum rchk_ssr_state state;
 	int idx;
-	int max_str_size;
+	int max; // max str size
 	char* str;
 };
 

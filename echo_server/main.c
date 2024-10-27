@@ -17,6 +17,7 @@
 struct client {
 	int fd;
 	rchk_ssr* reader;
+	int sent;
 };
 
 typedef struct client client;
@@ -38,11 +39,21 @@ void set_nonblocking(int fd) {
   	}
 }
 
-void register_in_epoll(int epoll_fd, int client_sock_fd) {
- 	struct epoll_event event;
+void set_interests(int epoll_fd, client* c, unsigned int interests) {
+	struct epoll_event event; bzero((char*) &event, sizeof(event));
 
-	bzero((char*) &event, sizeof(event));
+	event.events = interests;
+	event.data.ptr = c;	
+
+	// registration in epoll
+	int reg_result = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, c->fd, &event);  
  	
+	if (reg_result == -1) {
+ 		error("epoll_ctl() error");
+ 	}
+}
+
+void register_in_epoll(int epoll_fd, int client_sock_fd) {
  	// initialize reader
 	rchk_ssr_status status;
 	rchk_ssr* reader = rchk_ssr_new(1024, &status);
@@ -51,17 +62,10 @@ void register_in_epoll(int epoll_fd, int client_sock_fd) {
 	client* c = malloc(sizeof(client));
 	c->fd = client_sock_fd;
 	c->reader = reader;
+	c->sent = 0;
 
-	// initialize event subscription
-	event.events = EPOLLIN | EPOLLET; // read event + edge-triggered mode
-	event.data.ptr = c;	
-
-	// registration in epoll
-	int reg_result = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_sock_fd, &event);  
- 	
-	if (reg_result == -1) {
- 		error("epoll_ctl() error");
- 	}
+	// initialize event subscription : EPOLLIN = read event, EPOLLET = edge-triggered mode
+	set_interests(epoll_fd, c, EPOLLIN | EPOLLET); 	
 }
 
 void print_raw_simple_string(char* chunk, int bytes) {
@@ -165,22 +169,21 @@ int main(void) {
 				}
 			}
 		        else {
-				printf("Reading client input data..\n");
-				// client socket; read as much data as we can
+				printf("Client socket read/write...\n");
 				char chunk[256];
-        			for (;;) {
-					// printf("fd : %d\n", c->fd);
-        			 	ssize_t nbytes = read(c->fd, chunk, sizeof(chunk));
+        			for (;;) {	
+					// read as much data as we can
+					ssize_t nbytes = read(c->fd, chunk, sizeof(chunk));
 
 					if (nbytes > 0) {	
-						// print_raw_simple_string(chunk, nbytes);
-
 						rchk_ssr_status status;
 						rchk_ssr_process(c->reader, chunk, nbytes, &status);
 
 						if (rchk_ssr_is_done(c->reader)) {
 							printf("Client %d : %s\n", c->fd, rchk_ssr_str(c->reader));
 							rchk_ssr_clear(c->reader);
+							// change event interests from read to write
+
 						}
 					} else if (nbytes == 0) {
 						printf("Client %d : exited\n", c->fd);
@@ -190,16 +193,17 @@ int main(void) {
 
 						rchk_ssr_free(c->reader);
 						free(c);
-        			 	  	
+        				  	
 						break;
 					} else if (nbytes == -1) {
 						if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        			 	  	  	printf("Finished reading data from client\n");
-        			 	  	  	break;
-        			 	  	} else {
+        				  	  	printf("Finished reading data from client\n");
+        				  	  	break;
+        				  	} else {
 							error("read() error");
-        			 	  	}
-					}
+        				  	}
+					}		
+        			
         			}
 			}	
 		}
