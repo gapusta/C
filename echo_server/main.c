@@ -63,7 +63,7 @@ void modify_interests(int epoll_fd, client* c, unsigned int interests) {
 	event.events = interests;
 	event.data.ptr = c;	
 
-	// modification in epoll
+	// modify events
 	int reg_result = epoll_ctl(epoll_fd, EPOLL_CTL_MOD, c->fd, &event);  
  	
 	if (reg_result == -1) {
@@ -155,9 +155,9 @@ int main(void) {
 		for (int i=0; i<nevents; i++) {
 			client* c = (client*) events[i].data.ptr;
 
-			if ((events[i].events & EPOLLERR) || (events[i].events & EPOLLHUP) || (!(events[i].events & EPOLLIN))) {
+			if ((events[i].events & EPOLLERR) || (events[i].events & EPOLLHUP)) {
 				// error case
-				fprintf(stderr, "epoll error\n");
+				printf("epoll event error or hang up happened\n");
 				close(c->fd);
 				continue;
 			}
@@ -200,8 +200,7 @@ int main(void) {
 
 						if (rchk_ssr_is_done(c->reader)) {
 							printf("Client %d : %s\n", c->fd, rchk_ssr_str(c->reader));
-							// modify_interests(epoll_fd, c, EPOLLOUT | EPOLLET);
-							rchk_ssr_clear(c->reader);
+							modify_interests(epoll_fd, c, EPOLLOUT | EPOLLET);
 							break;
 						}
 					} else if (nbytes == 0) {
@@ -216,7 +215,7 @@ int main(void) {
 						break;
 					} else if (nbytes == -1) {
 						if (errno == EAGAIN || errno == EWOULDBLOCK) {
-							printf("Finished reading data from client\n");
+							printf("Socket input buffer is empty\n");
 							break;
 						} else {
 							error("read() error");
@@ -226,9 +225,36 @@ int main(void) {
 				break;
 			}
 
-			// if (events[i].events & EPOLLOUT) {
-     			
-			// }
+			if (events[i].events & EPOLLOUT) {
+     			char* response = "+OK\r\n";
+				int response_len = 5;
+				printf("Sending back: +OK\\r\\n\n");
+				for (;;) {
+					// read as much data as we can
+					ssize_t nbytes = write(c->fd, response + c->sent, response_len - c->sent);
+					printf("Previous sends : %d, last send : %ld\n", c->sent, nbytes);
+
+					if (nbytes >= 0) {
+						c->sent = c->sent + nbytes;
+
+						if (c->sent == response_len) {
+							// response has been fully sent
+							printf("Finished sending: +OK\\r\\n\n");
+							c->sent = 0;
+							rchk_ssr_clear(c->reader);
+							modify_interests(epoll_fd, c, EPOLLIN | EPOLLET);
+							break;
+						}
+					} else {
+						if (errno == EAGAIN || errno == EWOULDBLOCK) {
+							printf("Socket output buffer is full\n");
+							break;
+						} else {
+							error("write() error");
+						}
+					}
+				}
+			}
 		}
 	}
      
@@ -238,4 +264,3 @@ int main(void) {
      
 	return 0;
 }
-
