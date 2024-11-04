@@ -102,13 +102,13 @@ int main(void) {
 	int server_sock_fd;
 
 	// create server socket
-	printf("Creating server socket...\n");
+	printf("Creating server socket\n");
 	if ((server_sock_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		error("socket() error");
 	}
 
 	// bind server socket to address/port
-	printf("Binding server socket...\n");
+	printf("Binding server socket\n");
 	struct sockaddr_in server_address; // will contain the address of the server
 	bzero((char*) &server_address, sizeof(server_address));
 	server_address.sin_family = AF_INET;
@@ -122,7 +122,7 @@ int main(void) {
 	set_nonblocking(server_sock_fd);
 
 	// mark server as "listener"
-	printf("Making server socket as listener...\n");
+	printf("Making server socket as listener\n");
 	if (listen(server_sock_fd, SOMAXCONN) < 0) { // the server socket will be used to accept incoming connection requests using accept(2)
 		error("listen() error");
 	}
@@ -144,8 +144,7 @@ int main(void) {
 
 	struct epoll_event* events = calloc(MAXEVENTS, sizeof(server_event));
 	for(;;) {
-		// wait for events to come/happen
-		printf("Waiting...\n");
+		printf("Waiting for IO events\n");
 		int nevents = epoll_wait(epoll_fd, events, MAXEVENTS, -1);
 		
 		if (nevents == -1) {
@@ -171,13 +170,13 @@ int main(void) {
 					int client_sock_fd = accept(server_sock_fd, &client_address, &client_address_len);
 
 					if (client_sock_fd != -1) {
-						printf("Accepted new connection on fd %d ...\n", client_sock_fd);
+						printf("Accepted new connection/client : %d\n", client_sock_fd);
 						
 						set_nonblocking(client_sock_fd);
-						printf("Set %d as non-blockin...\n", client_sock_fd);
+						printf("Set %d as non-blockin\n", client_sock_fd);
 
 						register_in_epoll(epoll_fd, client_sock_fd);
-						printf("Registered %d in epoll...\n", client_sock_fd);
+						printf("Registered %d in epoll\n", client_sock_fd);
 					} else if (errno == EAGAIN || errno == EWOULDBLOCK){
           				    	// we processed all of pending connections
           				    	break;
@@ -190,6 +189,7 @@ int main(void) {
 
 			if (events[i].events & EPOLLIN) {
 				char chunk[256];
+				printf("Reading message from client : %d\n", c->fd);
 				for (;;) {
 					// read as much data as we can
 					ssize_t nbytes = read(c->fd, chunk, sizeof(chunk));
@@ -199,7 +199,7 @@ int main(void) {
 						rchk_ssr_process(c->reader, chunk, nbytes, &status);
 
 						if (rchk_ssr_is_done(c->reader)) {
-							printf("Client %d : %s\n", c->fd, rchk_ssr_str(c->reader));
+							printf("Finished reading message from : %d, message : %s\n", c->fd, rchk_ssr_str(c->reader));
 							modify_interests(epoll_fd, c, EPOLLOUT | EPOLLET);
 							break;
 						}
@@ -215,7 +215,7 @@ int main(void) {
 						break;
 					} else if (nbytes == -1) {
 						if (errno == EAGAIN || errno == EWOULDBLOCK) {
-							printf("Socket input buffer is empty\n");
+							printf("Client : %d socket input buffer is empty\n", c->fd);
 							break;
 						} else {
 							error("read() error");
@@ -226,20 +226,54 @@ int main(void) {
 			}
 
 			if (events[i].events & EPOLLOUT) {
-     			char* response = "+OK\r\n";
-				int response_len = 5;
-				printf("Sending back: +OK\\r\\n\n");
+				int chunk_size = 256;
+     			char chunk[chunk_size];
+				printf("Sending back: %s\n", rchk_ssr_str(c->reader));
 				for (;;) {
-					// read as much data as we can
-					ssize_t nbytes = write(c->fd, response + c->sent, response_len - c->sent);
-					printf("Previous sends : %d, last send : %ld\n", c->sent, nbytes);
+					// write as much data as we can
+					int str_size = rchk_ssr_str_size(c->reader);
+					int occupied = 0;
+					int prefix_size = 0;
+					int payload_size = 0;
+					int suffix_size = 0;
+
+					// 1. compute and set message prefix if needed
+					if (c->sent < 1) {
+						chunk[occupied++] = '+';
+						prefix_size = 1;
+					}
+
+					// 2. copy message part to buffer
+					int remaining = str_size - c->sent;
+					int chunk_available = chunk_size - prefix_size;
+
+					payload_size = min(remaining, chunk_available);
+
+					for (int pidx=0; pidx < payload_size; pidx++, occupied++) {
+						chunk[occupied] = c->reader->str[c->sent + pidx];
+					}
+
+					// 3. deal with '\r'
+					if (c->sent < str_size + 2 && occupied < chunk_size) {
+						chunk[occupied++] = '\r';
+						suffix_size++;
+					}
+
+					// 4. deal with '\n'
+					if (c->sent < str_size + 3 && occupied < chunk_size) {
+						chunk[occupied++] = '\n';
+						suffix_size++;
+					}
+
+					// send data
+					ssize_t nbytes = write(c->fd, chunk, prefix_size + payload_size + suffix_size);
 
 					if (nbytes >= 0) {
 						c->sent = c->sent + nbytes;
-
-						if (c->sent == response_len) {
-							// response has been fully sent
-							printf("Finished sending: +OK\\r\\n\n");
+						
+						if (c->sent == str_size + 3) {
+							// all the data has been sent
+							printf("Finished sending message back. Message : %s\n", rchk_ssr_str(c->reader));
 							c->sent = 0;
 							rchk_ssr_clear(c->reader);
 							modify_interests(epoll_fd, c, EPOLLIN | EPOLLET);
@@ -247,10 +281,10 @@ int main(void) {
 						}
 					} else {
 						if (errno == EAGAIN || errno == EWOULDBLOCK) {
-							printf("Socket output buffer is full\n");
+							printf("Client : %d socket output buffer is full\n", c->fd);
 							break;
 						} else {
-							error("write() error");
+							error("read() error");
 						}
 					}
 				}
@@ -260,7 +294,7 @@ int main(void) {
      
 	close(server_sock_fd);
 
-	printf("Sockets closed...\n");
+	printf("Server socket closed\n");
      
 	return 0;
 }
