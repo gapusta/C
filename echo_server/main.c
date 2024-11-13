@@ -16,7 +16,7 @@
 
 struct client {
 	int fd;
-	rchk_ssr* reader;
+	RchkStringReader* reader;
 	int sent;
 };
 
@@ -73,8 +73,7 @@ void modify_interests(int epoll_fd, client* c, unsigned int interests) {
 
 void register_in_epoll(int epoll_fd, int client_sock_fd) {
  	// initialize reader
-	rchk_ssr_status status;
-	rchk_ssr* reader = rchk_ssr_new(1024, &status);
+	RchkStringReader* reader = rchkStringReaderNew(1024);
 
 	// initialize client data
 	client* c = malloc(sizeof(client));
@@ -195,11 +194,10 @@ int main(void) {
 					ssize_t nbytes = read(c->fd, chunk, sizeof(chunk));
 
 					if (nbytes > 0) {
-						rchk_ssr_status status;
-						rchk_ssr_process(c->reader, chunk, nbytes, &status);
+						rchkStringReaderProcess(c->reader, chunk, nbytes);
 
-						if (rchk_ssr_is_done(c->reader)) {
-							printf("Finished reading message from : %d, message : %s\n", c->fd, rchk_ssr_str(c->reader));
+						if (rchkStringReaderIsDone(c->reader)) {
+							printf("Finished reading message from : %d, message : %s\n", c->fd, rchkStringReaderData(c->reader));
 							modify_interests(epoll_fd, c, EPOLLOUT | EPOLLET);
 							break;
 						}
@@ -209,7 +207,7 @@ int main(void) {
 						shutdown(c->fd, SHUT_WR);
 						close(c->fd);
 
-						rchk_ssr_free(c->reader);
+						rchkStringReaderFree(c->reader);
 						free(c);
 
 						break;
@@ -228,10 +226,12 @@ int main(void) {
 			if (events[i].events & EPOLLOUT) {
 				int chunk_size = 256;
      			char chunk[chunk_size];
-				printf("Sending back: %s\n", rchk_ssr_str(c->reader));
+				char* payload = rchkStringReaderData(c->reader);
+				printf("Sending back: %s\n", payload);
+
 				for (;;) {
 					// write as much data as we can
-					int str_size = rchk_ssr_str_size(c->reader);
+					int str_size = rchkStringReaderDataSize(c->reader);
 					int occupied = 0;
 					int prefix_size = 0;
 					int payload_size = 0;
@@ -250,7 +250,7 @@ int main(void) {
 					payload_size = min(remaining, chunk_available);
 
 					for (int pidx=0; pidx < payload_size; pidx++, occupied++) {
-						chunk[occupied] = c->reader->str[c->sent + pidx];
+						chunk[occupied] = payload[c->sent + pidx];
 					}
 
 					// 3. deal with '\r'
@@ -273,9 +273,9 @@ int main(void) {
 						
 						if (c->sent == str_size + 3) {
 							// all the data has been sent
-							printf("Finished sending message back. Message : %s\n", rchk_ssr_str(c->reader));
+							printf("Finished sending message back. Message : %s\n", rchkStringReaderData(c->reader));
 							c->sent = 0;
-							rchk_ssr_clear(c->reader);
+							rchkStringReaderClear(c->reader);
 							modify_interests(epoll_fd, c, EPOLLIN | EPOLLET);
 							break;
 						}

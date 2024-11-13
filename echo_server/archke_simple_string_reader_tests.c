@@ -7,22 +7,20 @@
 
 void test1() {
 	char* input = "+hello\r\n";
-        char* expected = "hello";	
+	char* expected = "hello";	
 		
-	rchk_ssr_status status = { .code = 0 };
+	RchkStringReader* reader = rchkStringReaderNew(BUFFER_SIZE);
 
-	rchk_ssr* reader = rchk_ssr_new(BUFFER_SIZE, &status);
+	rchkStringReaderProcess(reader, input, strlen(input));
 
-	rchk_ssr_process(reader, input, strlen(input), &status);
-
-	char* result = rchk_ssr_str(reader);
+	char* result = rchkStringReaderData(reader);
 
 	if (strcmp(result, expected) != 0) {
 		printf("Test #1 failed\n");
 		exit(-1);
 	} 
 
-	rchk_ssr_free(reader);
+	rchkStringReaderFree(reader);
 	
 	printf("Test #1 passed\n");
 }
@@ -32,21 +30,19 @@ void test2() {
 	char* input2 = "lo\r\n";
         char* expected = "hello";	
 		
-	rchk_ssr_status status = { .code = 0 };
+	RchkStringReader* reader = rchkStringReaderNew(BUFFER_SIZE);
 
-	rchk_ssr* reader = rchk_ssr_new(BUFFER_SIZE, &status);
+	rchkStringReaderProcess(reader, input1, strlen(input1));
+	rchkStringReaderProcess(reader, input2, strlen(input2));
 
-	rchk_ssr_process(reader, input1, strlen(input1), &status);
-	rchk_ssr_process(reader, input2, strlen(input2), &status);
-
-	char* result = rchk_ssr_str(reader);
+	char* result = rchkStringReaderData(reader);
 
 	if (strcmp(result, expected) != 0) {
 		printf("Test #2 failed\n");
 		exit(-1);
 	} 
 
-	rchk_ssr_free(reader);
+	rchkStringReaderFree(reader);
 	
 	printf("Test #2 passed\n");
 }
@@ -60,46 +56,42 @@ void test3() {
         
 	char* expected = "Catch me if you can, Mr. Holmes";	
 		
-	rchk_ssr_status status = { .code = 0 };
+	RchkStringReader* reader = rchkStringReaderNew(BUFFER_SIZE);
 
-	rchk_ssr* reader = rchk_ssr_new(BUFFER_SIZE, &status);
+	rchkStringReaderProcess(reader, input1, strlen(input1));
+	rchkStringReaderProcess(reader, input2, strlen(input2));
+	rchkStringReaderProcess(reader, input3, strlen(input3));
+	rchkStringReaderProcess(reader, input4, strlen(input4));
+	rchkStringReaderProcess(reader, input5, strlen(input5));
 
-	rchk_ssr_process(reader, input1, strlen(input1), &status);
-	rchk_ssr_process(reader, input2, strlen(input2), &status);
-	rchk_ssr_process(reader, input3, strlen(input3), &status);
-	rchk_ssr_process(reader, input4, strlen(input4), &status);
-	rchk_ssr_process(reader, input5, strlen(input5), &status);
-
-	char* result = rchk_ssr_str(reader);
+	char* result = rchkStringReaderData(reader);
 
 	if (strcmp(result, expected) != 0) {
 		printf("Test #3 failed\n");
 		exit(-1);
 	} 
 
-	rchk_ssr_free(reader);
+	rchkStringReaderFree(reader);
 	
 	printf("Test #3 passed\n");
 }
 
 void test4() {
 	char* input = "+\r\n";
-        char* expected = "";	
+	char* expected = "";	
 		
-	rchk_ssr_status status = { .code = 0 };
+	RchkStringReader* reader = rchkStringReaderNew(BUFFER_SIZE);
 
-	rchk_ssr* reader = rchk_ssr_new(BUFFER_SIZE, &status);
+	rchkStringReaderProcess(reader, input, strlen(input));
 
-	rchk_ssr_process(reader, input, strlen(input), &status);
-
-	char* result = rchk_ssr_str(reader);
+	char* result = rchkStringReaderData(reader);
 
 	if (strcmp(result, expected) != 0) {
 		printf("Test #4 failed\n");
 		exit(-1);
 	} 
 
-	rchk_ssr_free(reader);
+	rchkStringReaderFree(reader);
 	
 	printf("Test #4 passed\n");
 }
@@ -107,33 +99,32 @@ void test4() {
 // 'clear' operation test
 void test5() {
 	char* input1 = "+hello\r\n";
-        char* expected1 = "hello";	
+	char* expected1 = "hello";	
 	
 	char* input2 = "+hey\r\n";
-        char* expected2 = "hey";
+	char* expected2 = "hey";
 
-	rchk_ssr_status status = { .code = 0 };
+	RchkStringReader* reader = rchkStringReaderNew(BUFFER_SIZE);
 
-	rchk_ssr* reader = rchk_ssr_new(BUFFER_SIZE, &status);
+	rchkStringReaderProcess(reader, input1, strlen(input1));
 
-	rchk_ssr_process(reader, input1, strlen(input1), &status);
-	char* result = rchk_ssr_str(reader);
+	char* result = rchkStringReaderData(reader);
 	if (strcmp(result, expected1) != 0) {
 		printf("Test #5 failed\n");
 		exit(-1);
 	}
 
-	rchk_ssr_clear(reader);
+	rchkStringReaderClear(reader);
 
-	status.code = 0;
-	rchk_ssr_process(reader, input2, strlen(input2), &status);
-	result = rchk_ssr_str(reader);
+	rchkStringReaderProcess(reader, input2, strlen(input2));
+
+	result = rchkStringReaderData(reader);
 	if (strcmp(result, expected2) != 0) {
 		printf("Test #5 failed\n");
 		exit(-1);
 	}
 
-	rchk_ssr_free(reader);
+	rchkStringReaderFree(reader);
 	
 	printf("Test #5 passed\n");
 }
