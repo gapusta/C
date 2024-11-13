@@ -83,3 +83,6 @@ void rchkStringReaderFree(RchkStringReader* reader) {
 	free(reader); 
 }
 
+#undef ARCHKE_SIMPLE_STRING_READER_START
+#undef ARCHKE_SIMPLE_STRING_READER_READ
+#undef ARCHKE_SIMPLE_STRING_READER_DONE
