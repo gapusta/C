@@ -20,3 +20,4 @@ int   rchkStringReaderDataMaxSize(RchkStringReader* reader);
 void  rchkStringReaderFree(RchkStringReader* reader);
 
 #endif
+
