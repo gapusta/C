@@ -11,7 +11,7 @@
 #include <errno.h>
 #include "archke_event_loop.h"
 #include "archke_simple_string_reader.h"
-#include "utils.c"
+#include "archke_utils.c"
 
 #define PORT 9999
 
