@@ -3,12 +3,10 @@
 #include <string.h>
 #include <stdio.h>
 #include <sys/types.h> // This header file contains definitions of a number of data types used in system calls. These types are used in the next two include files.
-#include <sys/socket.h> 
-#include <netinet/in.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <sys/epoll.h>
 #include <errno.h>
+#include "archke_socket.h"
 #include "archke_event_loop.h"
 #include "archke_simple_string_reader.h"
 #include "archke_utils.c"
@@ -27,18 +25,6 @@ typedef struct server server;
 void error(const char *msg) {
     perror(msg);
     exit(1);
-}
-
-void set_nonblocking(int fd) {
-  	int flags = fcntl(fd, F_GETFL, 0);
-	
-	if (flags == -1) {
-		error("fcntl() get flags error");    
-  	}
-
-  	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-    		error("fcntl() set flags error");
-  	}
 }
 
 void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* event, void* clientData);
@@ -118,10 +104,8 @@ void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* eve
 
 	if (nbytes == 0) {
 		printf("Client %d : exited\n", c->fd);
-
-		shutdown(c->fd, SHUT_WR);
-		close(c->fd);
-
+		rchkEventLoopUnregister(eventLoop, c->fd);
+		rchkSocketClose(c->fd);
 		rchkStringReaderFree(c->reader);
 		free(c);
 		return;
@@ -143,17 +127,7 @@ void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* eve
 void rchkHandleAcceptEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* event, void* clientData) {
 	int serverSocketFd = *((int*)clientData);
 
-	struct sockaddr clientAddress;
-	socklen_t clientAddrLen = sizeof(clientAddress);
-	int clientSocketFd = accept(serverSocketFd, &clientAddress, &clientAddrLen);
-	if (clientSocketFd == -1) {
-		error("accept() error");
-	}
-
-	printf("Accepted new connection/client : %d\n", clientSocketFd);
-	
-	set_nonblocking(clientSocketFd);
-	printf("Set %d as non-blockin\n", clientSocketFd);
+	int clientSocketFd = rchkServerSocketAccept(serverSocketFd);
 
 	// initialize reader
 	RchkStringReader* reader = rchkStringReaderNew(1024);
@@ -174,34 +148,10 @@ void rchkHandleAcceptEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* e
 }
 
 int main(void) {
-	int serverSocketFd;
+	// create socket, open it and make listen on port
+	int serverSocketFd = rchkServerSocketNew(9999);
 
-	// create server socket
-	printf("Creating server socket\n");
-	if ((serverSocketFd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		error("socket() error");
-	}
-
-	// bind server socket to address/port
-	printf("bind socket to port 9999\n");
-	struct sockaddr_in server_address; // will contain the address of the server
-	bzero((char*) &server_address, sizeof(server_address));
-	server_address.sin_family = AF_INET;
-     	server_address.sin_addr.s_addr = INADDR_ANY;
-     	server_address.sin_port = htons(PORT);
-	if (bind(serverSocketFd, (struct sockaddr *) &server_address, sizeof(server_address)) < 0) {
-		error("bind() error");
-	}
-
-	// make server socket nonblocking
-	printf("set server socket non-blocking\n");
-	set_nonblocking(serverSocketFd);
-
-	// mark server as "listener"
-	printf("make server socket listen to port 9999\n");
-	if (listen(serverSocketFd, SOMAXCONN) < 0) { // the server socket will be used to accept incoming connection requests using accept(2)
-		error("listen() error");
-	}
+	rchkSocketSetNonBlocking(serverSocketFd);
 
 	// create the epoll
 	printf("Created an event loop\n");

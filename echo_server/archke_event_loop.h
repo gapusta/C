@@ -26,7 +26,7 @@ typedef struct RchkEventLoop {
 
 RchkEventLoop* rchkEventLoopNew(int setsize);
 int  rchkEventLoopRegister(RchkEventLoop* eventLoop, int fd, int mask, rchkHandleEvent* proc, void* clientData);
-void rchkEventLoopUnregister(RchkEventLoop* eventLoop, int fd, int mask);
+void rchkEventLoopUnregister(RchkEventLoop* eventLoop, int fd);
 void rchkEventLoopMain(RchkEventLoop* eventLoop); // main event loop
 void rchkEventLoopFree(RchkEventLoop* eventLoop);
 

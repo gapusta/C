@@ -73,7 +73,7 @@ int rchkEventLoopRegister(RchkEventLoop* eventLoop, int fd, int mask, rchkHandle
     return 0;
 }
 
-void rchkEventLoopUnregister(RchkEventLoop* eventLoop, int fd, int mask) {
+void rchkEventLoopUnregister(RchkEventLoop* eventLoop, int fd) {
     epoll_ctl(eventLoop->fd, EPOLL_CTL_DEL, fd, NULL);
 
     RchkEvent* event = &eventLoop->events[fd];
