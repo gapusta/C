@@ -151,7 +151,7 @@ int main(void) {
 	// create socket, open it and make listen on port
 	int serverSocketFd = rchkServerSocketNew(9999);
 
-	rchkSocketSetNonBlocking(serverSocketFd);
+	rchkSocketSetMode(serverSocketFd, ARCHKE_SOCKET_MODE_NON_BLOCKING);
 
 	// create the epoll
 	printf("Created an event loop\n");

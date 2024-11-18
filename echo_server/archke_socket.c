@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include "archke_socket.h"
 
-int rchkSocketSetNonBlocking(int socketFd) {
+int rchkSocketSetMode(int socketFd, int mode) {
     // get socket's flags
     int flags = fcntl(socketFd, F_GETFL, 0);
 	if (flags < 0) {
@@ -66,7 +66,7 @@ int rchkServerSocketAccept(int serverSocketFd) {
 
 	printf("Accepted new connection/client : %d\n", clientSocketFd);
 	
-	rchkSocketSetNonBlocking(clientSocketFd);
+	rchkSocketSetMode(clientSocketFd, ARCHKE_SOCKET_MODE_NON_BLOCKING);
 	printf("Set %d as non-blocking\n", clientSocketFd);
 
     return clientSocketFd;
