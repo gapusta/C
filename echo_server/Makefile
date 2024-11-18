@@ -9,7 +9,7 @@ exed: main.c archke_event_loop_epoll.c archke_socket.c archke_simple_string_read
 	gcc *.o -o exed
 	rm *.o
 
-.PHONY: clean
+.PHONY: clean cleand
 clean:
 	rm exe
 
