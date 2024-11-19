@@ -61,7 +61,9 @@ int rchkEventLoopRegister(RchkEventLoop* eventLoop, int fd, int mask, rchkHandle
     int op = eventLoop->events[fd].mask == ARCHKE_EVENT_LOOP_NONE_EVENT ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
     int result = epoll_ctl(eventLoop->fd, op, fd, &epollEvent);
 	
-    if (result == -1) { return -1; }
+    if (result == -1) { 
+        return -1; 
+    }
 
     // 2. init additional event information
     RchkEvent* event = &eventLoop->events[fd];
