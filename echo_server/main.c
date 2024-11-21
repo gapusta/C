@@ -71,7 +71,7 @@ void rchkHandleWriteEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* ev
 	}
 
 	// send data
-	ssize_t nbytes = write(c->fd, chunk, prefix_size + payload_size + suffix_size);
+	int nbytes = rchkSocketWrite(c->fd, chunk, prefix_size + payload_size + suffix_size);
 	if (nbytes < 0) {
 		error("read() error");
 		return;
@@ -96,7 +96,7 @@ void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* eve
 	char chunk[256];
 	client* c = clientData;
 	
-	ssize_t nbytes = read(c->fd, chunk, sizeof(chunk));
+	int nbytes = rchkSocketRead(c->fd, chunk, sizeof(chunk));
 
 	if (nbytes == -1) {
 		error("read() error");
@@ -171,7 +171,8 @@ int main(void) {
 	printf("Run event loop\n");
 	rchkEventLoopMain(eventLoop);
 
-	close(serverSocketFd);
+	rchkEventLoopFree(eventLoop);
+	rchkServerSocketClose(serverSocketFd);
 
 	printf("Server socket closed\n");
      

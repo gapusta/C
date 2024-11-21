@@ -19,6 +19,24 @@ int rchkSocketSetMode(int socketFd, int mode) {
     return 0;
 }
 
+int rchkSocketRead(int socketFd, char* buffer, int bufferSize) {
+	ssize_t nbytes = read(socketFd, buffer, bufferSize);
+	if (nbytes == -1) {
+		return -1;
+	}
+
+	return nbytes;
+}
+
+int rchkSocketWrite(int socketFd, char* buffer, int n) {
+	ssize_t nbytes = write(socketFd, buffer, n);
+	if (nbytes < 0) {
+		return -1;
+	}
+
+	return nbytes;
+}
+
 void rchkSocketClose(int socketFd) {
     shutdown(socketFd, SHUT_WR);
     close(socketFd);
@@ -70,5 +88,9 @@ int rchkServerSocketAccept(int serverSocketFd) {
 	printf("Set %d as non-blocking\n", clientSocketFd);
 
     return clientSocketFd;
+}
+
+void rchkServerSocketClose(int serverSocketFd) {
+	close(serverSocketFd);
 }
 
