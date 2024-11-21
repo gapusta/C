@@ -44,14 +44,12 @@ void rchkSocketClose(int socketFd) {
 
 int rchkServerSocketNew(int port) {
     // create server socket
-	printf("Creating server socket\n");
 	int serverSocketFd = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocketFd < 0) {
 		return -1;
 	}
 
 	// bind server socket to address/port
-	printf("bind socket to port 9999\n");
 	struct sockaddr_in server_address = { 0 };
 
 	server_address.sin_family = AF_INET;
@@ -64,7 +62,6 @@ int rchkServerSocketNew(int port) {
 	}
 
 	// mark server as "listener" (accept incoming connection requests)
-	printf("make server socket listen to port %d\n", port);
 	if (listen(serverSocketFd, SOMAXCONN) < 0) { 
 		close(serverSocketFd);
         return -1;
@@ -81,11 +78,8 @@ int rchkServerSocketAccept(int serverSocketFd) {
 	if (clientSocketFd < 0) {
 		return -1;
 	}
-
-	printf("Accepted new connection/client : %d\n", clientSocketFd);
 	
 	rchkSocketSetMode(clientSocketFd, ARCHKE_SOCKET_MODE_NON_BLOCKING);
-	printf("Set %d as non-blocking\n", clientSocketFd);
 
     return clientSocketFd;
 }

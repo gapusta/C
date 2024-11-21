@@ -28,7 +28,7 @@ RchkEventLoop* rchkEventLoopNew(int setsize) {
     }
 
     int epollFd = epoll_create1(0);
-  	if (epollFd == -1) {
+  	if (epollFd < 0) {
         free(eventLoop->apiData);
         free(eventLoop->events);
         free(eventLoop);
@@ -61,7 +61,7 @@ int rchkEventLoopRegister(RchkEventLoop* eventLoop, int fd, int mask, rchkHandle
     int op = eventLoop->events[fd].mask == ARCHKE_EVENT_LOOP_NONE_EVENT ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
     int result = epoll_ctl(eventLoop->fd, op, fd, &epollEvent);
 	
-    if (result == -1) { 
+    if (result < 0) { 
         return -1; 
     }
 
@@ -88,7 +88,6 @@ void rchkEventLoopUnregister(RchkEventLoop* eventLoop, int fd) {
 void rchkEventLoopMain(RchkEventLoop* eventLoop) {
     struct epoll_event* epollEvents = (struct epoll_event*) eventLoop->apiData;
 	for(;;) {
-		// printf("Waiting for IO events\n");
 		int nevents = epoll_wait(eventLoop->fd, epollEvents, eventLoop->setsize, -1);
 
         for (int i=0; i<nevents; i++) {

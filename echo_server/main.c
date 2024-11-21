@@ -40,8 +40,6 @@ void rchkHandleWriteEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* ev
 	int payload_size = 0;
 	int suffix_size = 0;
 
-	printf("Sending back: %s\n", payload);
-
 	// 1. compute and set message prefix if needed
 	if (c->sent < 1) {
 		chunk[occupied++] = '+';
@@ -81,7 +79,6 @@ void rchkHandleWriteEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* ev
 	
 	if (c->sent == str_size + 3) {
 		// all the data has been sent
-		printf("Finished sending message back. Message : %s\n", rchkStringReaderData(c->reader));
 		c->sent = 0;
 		rchkStringReaderClear(c->reader);
 		// register read handler for new client
@@ -103,7 +100,6 @@ void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* eve
 	}
 
 	if (nbytes == 0) {
-		printf("Client %d : exited\n", c->fd);
 		rchkEventLoopUnregister(eventLoop, c->fd);
 		rchkSocketClose(c->fd);
 		rchkStringReaderFree(c->reader);
@@ -114,8 +110,6 @@ void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* eve
 	rchkStringReaderProcess(c->reader, chunk, nbytes);
 
 	if (rchkStringReaderIsDone(c->reader)) {
-		printf("Finished reading message from : %d, message : %s\n", c->fd, rchkStringReaderData(c->reader));
-
 		// register write handler for client
 		int result = rchkEventLoopRegister(eventLoop, c->fd, ARCHKE_EVENT_LOOP_WRITE_EVENT, rchkHandleWriteEvent, c);
 		if (result == -1) {
@@ -143,8 +137,6 @@ void rchkHandleAcceptEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* e
 	if (result == -1) {
 		error("client socket read event registration error");
 	}
-
-	printf("Registered %d in epoll\n", clientSocketFd);
 }
 
 int main(void) {
@@ -154,28 +146,23 @@ int main(void) {
 	rchkSocketSetMode(serverSocketFd, ARCHKE_SOCKET_MODE_NON_BLOCKING);
 
 	// create the epoll
-	printf("Created an event loop\n");
 	RchkEventLoop* eventLoop = rchkEventLoopNew(512);
   	if (eventLoop == NULL) {
   		error("Event loop creation error");
   	}
 
 	// register server's socket and "accept" event handler
-	printf("Registering server socket accept event\n");
 	int result = rchkEventLoopRegister(eventLoop, serverSocketFd, ARCHKE_EVENT_LOOP_READ_EVENT, rchkHandleAcceptEvent, &serverSocketFd);
 	if (result == -1) {
 		error("server socket accept registration error");
 	}
 
 	// run event loop
-	printf("Run event loop\n");
 	rchkEventLoopMain(eventLoop);
 
 	rchkEventLoopFree(eventLoop);
 	rchkServerSocketClose(serverSocketFd);
 
-	printf("Server socket closed\n");
-     
 	return 0;
 }
 
