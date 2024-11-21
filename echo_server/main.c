@@ -5,8 +5,6 @@
 #include "archke_event_loop.h"
 #include "archke_event_handlers.h"
 
-#define PORT 9999
-
 int main(void) {
 	// create socket, open it and make listen on port
 	int serverSocketFd = rchkServerSocketNew(9999);
