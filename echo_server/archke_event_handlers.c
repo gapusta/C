@@ -109,6 +109,8 @@ void rchkHandleAcceptEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* e
 
 	int clientSocketFd = rchkServerSocketAccept(serverSocketFd);
 
+	rchkSocketSetMode(clientSocketFd, ARCHKE_SOCKET_MODE_NON_BLOCKING);
+
 	// initialize reader
 	RchkStringReader* reader = rchkStringReaderNew(1024);
 

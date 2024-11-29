@@ -79,8 +79,6 @@ int rchkServerSocketAccept(int serverSocketFd) {
 		return -1;
 	}
 	
-	rchkSocketSetMode(clientSocketFd, ARCHKE_SOCKET_MODE_NON_BLOCKING);
-
     return clientSocketFd;
 }
 

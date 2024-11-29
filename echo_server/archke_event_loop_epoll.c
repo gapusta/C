@@ -37,6 +37,7 @@ RchkEventLoop* rchkEventLoopNew(int setsize) {
 
     eventLoop->fd = epollFd;
     eventLoop->setsize = setsize;
+    
     for (int i=0; i<setsize; i++) {
         eventLoop->events[i].mask = ARCHKE_EVENT_LOOP_NONE_EVENT;
         eventLoop->events[i].readEventHandle = NULL;
