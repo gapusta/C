@@ -1,32 +1,41 @@
-#include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
+#include "archke_error.h"
 #include "archke_socket.h"
 #include "archke_event_loop.h"
 #include "archke_event_handlers.h"
 
 int main(void) {
-	// create socket, open it and make listen on port
+	// create socket, open it and make it listen on port
 	int serverSocketFd = rchkServerSocketNew(9999);
+	if (serverSocketFd < 0) {
+		exitFailure("Cannot create/init server socket failed");
+	}
 
-	rchkSocketSetMode(serverSocketFd, ARCHKE_SOCKET_MODE_NON_BLOCKING);
+	// set server socket IO to non-blocking mode
+	if (rchkSocketSetMode(serverSocketFd, ARCHKE_SOCKET_MODE_NON_BLOCKING) < 0) {
+		rchkServerSocketClose(serverSocketFd);
+		exitFailure("Cannot make server socket non-blocking");
+	}
 
-	// create the epoll
+	// create the event loop
 	RchkEventLoop* eventLoop = rchkEventLoopNew(512);
   	if (eventLoop == NULL) {
-		perror("Event loop creation error");
-    	exit(1);
+		rchkServerSocketClose(serverSocketFd);
+		exitFailure("Cannot create/init main event loop");
   	}
 
 	// register server's socket and "accept" event handler
-	int result = rchkEventLoopRegister(eventLoop, serverSocketFd, ARCHKE_EVENT_LOOP_READ_EVENT, rchkHandleAcceptEvent, &serverSocketFd);
-	if (result == -1) {
-		perror("server socket accept registration error");
-    	exit(1);
+	if (rchkEventLoopRegister(eventLoop, serverSocketFd, ARCHKE_EVENT_LOOP_READ_EVENT, rchkHandleAcceptEvent, &serverSocketFd) < 0) {
+		rchkEventLoopFree(eventLoop);
+		rchkServerSocketClose(serverSocketFd);
+		exitFailure("Cannot register 'connection accept' event handler");
 	}
 
 	// run event loop
-	rchkEventLoopMain(eventLoop);
+	if (rchkEventLoopMain(eventLoop) < 0) {
+		// TODO: Gracefully disconnect clients and release resources 
+		exitFailure("Error during main event loop run");
+	}
 
 	rchkEventLoopFree(eventLoop);
 	rchkServerSocketClose(serverSocketFd);

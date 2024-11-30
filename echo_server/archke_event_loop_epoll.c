@@ -14,25 +14,22 @@ RchkEventLoop* rchkEventLoopNew(int setsize) {
         return NULL;
     }
 
+    eventLoop->events = NULL;
+    eventLoop->apiData = NULL;
+
     eventLoop->events = malloc(setsize * sizeof(RchkEvent));
     if (eventLoop->events == NULL) {
-        free(eventLoop);
-        return NULL;
+        goto err;
     }
 
     eventLoop->apiData = malloc(setsize * sizeof(struct epoll_event));
     if (eventLoop->apiData == NULL) {
-        free(eventLoop->events);
-        free(eventLoop);
-        return NULL;
+        goto err;
     }
 
     int epollFd = epoll_create1(0);
   	if (epollFd < 0) {
-        free(eventLoop->apiData);
-        free(eventLoop->events);
-        free(eventLoop);
-  		return NULL;
+        goto err;
   	}
 
     eventLoop->fd = epollFd;
@@ -46,6 +43,13 @@ RchkEventLoop* rchkEventLoopNew(int setsize) {
     }
 
     return eventLoop;
+
+err:
+    free(eventLoop->apiData);
+    free(eventLoop->events);
+    free(eventLoop);
+
+    return NULL;
 }
 
 int rchkEventLoopRegister(RchkEventLoop* eventLoop, int fd, int mask, rchkHandleEvent* proc, void* clientData) {
@@ -86,10 +90,13 @@ void rchkEventLoopUnregister(RchkEventLoop* eventLoop, int fd) {
     event->clientData = NULL;
 }
 
-void rchkEventLoopMain(RchkEventLoop* eventLoop) {
+int rchkEventLoopMain(RchkEventLoop* eventLoop) {
     struct epoll_event* epollEvents = (struct epoll_event*) eventLoop->apiData;
 	for(;;) {
 		int nevents = epoll_wait(eventLoop->fd, epollEvents, eventLoop->setsize, -1);
+        if (nevents < 0) {
+            return -1;
+        }
 
         for (int i=0; i<nevents; i++) {
             int fd = epollEvents[i].data.fd;
@@ -108,5 +115,8 @@ void rchkEventLoopMain(RchkEventLoop* eventLoop) {
 
 void rchkEventLoopFree(RchkEventLoop* eventLoop) {
     close(eventLoop->fd);
+    free(eventLoop->apiData);
+    free(eventLoop->events); // TODO: How to free 'clientData'?
+    free(eventLoop);
 }
 
