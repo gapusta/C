@@ -37,8 +37,11 @@ int rchkSocketWrite(int socketFd, char* buffer, int n) {
 	return nbytes;
 }
 
+void rchkSocketShutdownWrite(int socketFd) {
+	shutdown(socketFd, SHUT_WR);
+}
+
 void rchkSocketClose(int socketFd) {
-    shutdown(socketFd, SHUT_WR);
     close(socketFd);
 }
 

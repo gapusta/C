@@ -111,6 +111,8 @@ int rchkEventLoopMain(RchkEventLoop* eventLoop) {
             }
         }
     }
+
+    return 0;
 }
 
 void rchkEventLoopFree(RchkEventLoop* eventLoop) {

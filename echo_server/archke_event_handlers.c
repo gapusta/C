@@ -9,6 +9,7 @@
 #include "archke_event_loop.h"
 #include "archke_event_handlers.h"
 #include "archke_utils.c"
+#include "archke_logs.h"
 
 void error(const char *msg) {
     perror(msg);
@@ -87,6 +88,7 @@ void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* eve
 
 	if (nbytes == 0) {
 		rchkEventLoopUnregister(eventLoop, client->fd);
+		rchkSocketShutdownWrite(client->fd);
 		rchkSocketClose(client->fd);
 		rchkStringReaderFree(client->reader);
 		free(client);
@@ -108,22 +110,45 @@ void rchkHandleAcceptEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* e
 	int serverSocketFd = *((int*)clientData);
 
 	int clientSocketFd = rchkServerSocketAccept(serverSocketFd);
+	if (clientSocketFd < 0) {
+		logError("Accept client connection failed"); 
+		return;
+	}
 
-	rchkSocketSetMode(clientSocketFd, ARCHKE_SOCKET_MODE_NON_BLOCKING);
+	if (rchkSocketSetMode(clientSocketFd, ARCHKE_SOCKET_MODE_NON_BLOCKING) < 0) {
+		rchkSocketClose(clientSocketFd);
+		logError("Make client socket non-blocking failed");
+		return;
+	}
 
 	// initialize reader
 	RchkStringReader* reader = rchkStringReaderNew(1024);
+	if (reader == NULL) {
+		rchkSocketClose(clientSocketFd);
+		logError("Client data init failed");
+		return;
+	}
 
 	// initialize client data
 	Client* client = malloc(sizeof(Client));
+	if (reader == NULL) {
+		free(reader);
+		rchkSocketClose(clientSocketFd);
+		logError("Client data init failed");
+		return;
+	}
+
 	client->fd = clientSocketFd;
 	client->reader = reader;
 	client->sent = 0;
 
 	// register read handler for new client
-	int result = rchkEventLoopRegister(eventLoop, clientSocketFd, ARCHKE_EVENT_LOOP_READ_EVENT, rchkHandleReadEvent, client);
-	if (result == -1) {
-		error("client socket read event registration error");
+	if (rchkEventLoopRegister(eventLoop, clientSocketFd, ARCHKE_EVENT_LOOP_READ_EVENT, rchkHandleReadEvent, client) < 0) {
+		free(reader);
+		free(client);
+		rchkSocketClose(clientSocketFd);
+		logError("Client event registration failed");
 	}
+
 }
 
