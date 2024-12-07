@@ -41,6 +41,14 @@ void rchkSocketShutdownWrite(int socketFd) {
 	shutdown(socketFd, SHUT_WR);
 }
 
+void rchkSocketShutdownRead(int socketFd) {
+	shutdown(socketFd, SHUT_RD);
+}
+
+void rchkSocketShutdown(int socketFd) {
+	shutdown(socketFd, SHUT_RDWR);
+}
+
 void rchkSocketClose(int socketFd) {
     close(socketFd);
 }

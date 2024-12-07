@@ -8,6 +8,8 @@ int  rchkSocketSetMode(int socketFd, int mode);
 int  rchkSocketRead(int socketFd, char* buffer, int bufferSize);
 int  rchkSocketWrite(int socketFd, char* buffer, int n);
 void rchkSocketShutdownWrite(int socketFd);
+void rchkSocketShutdownRead(int socketFd);
+void rchkSocketShutdown(int socketFd);
 void rchkSocketClose(int socketFd);
 
 int  rchkServerSocketNew(int port);

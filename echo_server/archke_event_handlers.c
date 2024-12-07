@@ -83,13 +83,21 @@ void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* eve
 	int nbytes = rchkSocketRead(client->fd, chunk, sizeof(chunk));
 
 	if (nbytes == -1) {
-		error("read() error");
+		logError("Read from client failed");
+		// close connections (exactly how its handled in Redis. See networking.c -> (freeClient(c) -> unlinkClient(c)))
+		rchkSocketShutdown(client->fd);
+		rchkSocketClose(client->fd);
+		// free resources
+		rchkEventLoopUnregister(eventLoop, client->fd);
+		rchkStringReaderFree(client->reader);
+		free(client);
+		return;
 	}
 
 	if (nbytes == 0) {
-		rchkEventLoopUnregister(eventLoop, client->fd);
 		rchkSocketShutdownWrite(client->fd);
 		rchkSocketClose(client->fd);
+		rchkEventLoopUnregister(eventLoop, client->fd);
 		rchkStringReaderFree(client->reader);
 		free(client);
 		return;
