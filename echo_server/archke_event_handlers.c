@@ -58,7 +58,14 @@ void rchkHandleWriteEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* ev
 	// send data
 	int nbytes = rchkSocketWrite(client->fd, chunk, prefix_size + payload_size + suffix_size);
 	if (nbytes < 0) {
-		error("read() error");
+		logError("Write to client failed");
+		// close connections (exactly how its handled in Redis. See networking.c -> (freeClient(c) -> unlinkClient(c)))
+		rchkSocketShutdown(client->fd);
+		rchkEventLoopUnregister(eventLoop, client->fd);
+		rchkSocketClose(client->fd);
+		// free resources
+		rchkStringReaderFree(client->reader);
+		free(client);
 		return;
 	}
 
@@ -82,19 +89,20 @@ void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* eve
 	
 	int nbytes = rchkSocketRead(client->fd, chunk, sizeof(chunk));
 
-	if (nbytes == -1) {
+	if (nbytes < 0) {
 		logError("Read from client failed");
 		// close connections (exactly how its handled in Redis. See networking.c -> (freeClient(c) -> unlinkClient(c)))
 		rchkSocketShutdown(client->fd);
+		rchkEventLoopUnregister(eventLoop, client->fd);
 		rchkSocketClose(client->fd);
 		// free resources
-		rchkEventLoopUnregister(eventLoop, client->fd);
 		rchkStringReaderFree(client->reader);
 		free(client);
 		return;
 	}
 
 	if (nbytes == 0) {
+		// client closed the connection
 		rchkSocketShutdownWrite(client->fd);
 		rchkSocketClose(client->fd);
 		rchkEventLoopUnregister(eventLoop, client->fd);
