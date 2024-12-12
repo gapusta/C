@@ -11,11 +11,6 @@
 #include "archke_utils.c"
 #include "archke_logs.h"
 
-void error(const char *msg) {
-    perror(msg);
-    exit(1);
-}
-
 void rchkHandleWriteEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* event, void* clientData) {
 	int chunk_size = 256;
 	char chunk[chunk_size];
@@ -76,9 +71,14 @@ void rchkHandleWriteEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* ev
 		client->sent = 0;
 		rchkStringReaderClear(client->reader);
 		// register read handler for new client
-		int result = rchkEventLoopRegister(eventLoop, client->fd, ARCHKE_EVENT_LOOP_READ_EVENT, rchkHandleReadEvent, client);
-		if (result == -1) {
-			error("client socket read event registration error");
+		if (rchkEventLoopRegister(eventLoop, client->fd, ARCHKE_EVENT_LOOP_READ_EVENT, rchkHandleReadEvent, client) < 0) {
+			logError("Client socket read event registration error");
+			rchkSocketShutdown(client->fd);
+			rchkEventLoopUnregister(eventLoop, client->fd);
+			rchkSocketClose(client->fd);
+			rchkStringReaderFree(client->reader);
+			free(client);
+			return;
 		}
 	}
 }
@@ -115,9 +115,14 @@ void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* eve
 
 	if (rchkStringReaderIsDone(client->reader)) {
 		// register write handler for client
-		int result = rchkEventLoopRegister(eventLoop, client->fd, ARCHKE_EVENT_LOOP_WRITE_EVENT, rchkHandleWriteEvent, client);
-		if (result == -1) {
-			error("client socket write event registration error");
+		if (rchkEventLoopRegister(eventLoop, client->fd, ARCHKE_EVENT_LOOP_WRITE_EVENT, rchkHandleWriteEvent, client) < 0) {
+			logError("Client socket write event registration error");
+			rchkSocketShutdown(client->fd);
+			rchkEventLoopUnregister(eventLoop, client->fd);
+			rchkSocketClose(client->fd);
+			rchkStringReaderFree(client->reader);
+			free(client);
+			return;
 		}
 	}
 }
