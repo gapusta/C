@@ -101,9 +101,12 @@ void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* eve
 		return;
 	}
 
-	if (nbytes == 0) {
-		// client closed the connection
+	// client sent us FIN and we received it (client is waiting for us to send FIN back)
+	// client will not send us any more data
+	if (nbytes == 0 ) {
+		// we send FIN(or possibly FIN,ACK) back (or rather we ask the kernel to send FIN back to client)
 		rchkSocketShutdownWrite(client->fd);
+		// then we close (release resources)
 		rchkSocketClose(client->fd);
 		rchkEventLoopUnregister(eventLoop, client->fd);
 		rchkStringReaderFree(client->reader);
