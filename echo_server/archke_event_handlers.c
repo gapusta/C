@@ -71,7 +71,8 @@ void rchkHandleWriteEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* ev
 		client->sent = 0;
 		rchkStringReaderClear(client->reader);
 		// register read handler for new client
-		if (rchkEventLoopRegister(eventLoop, client->fd, ARCHKE_EVENT_LOOP_READ_EVENT, rchkHandleReadEvent, client) < 0) {
+		RchkClientConfig config = { .data = client, .free = NULL };
+		if (rchkEventLoopRegister(eventLoop, client->fd, ARCHKE_EVENT_LOOP_READ_EVENT, rchkHandleReadEvent, &config) < 0) {
 			logError("Client socket read event registration error");
 			rchkSocketShutdown(client->fd);
 			rchkEventLoopUnregister(eventLoop, client->fd);
@@ -103,7 +104,7 @@ void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* eve
 
 	// client sent us FIN and we received it (client is waiting for us to send FIN back)
 	// client will not send us any more data
-	if (nbytes == 0 ) {
+	if (nbytes == 0) {
 		// we send FIN(or possibly FIN,ACK) back (or rather we ask the kernel to send FIN back to client)
 		rchkSocketShutdownWrite(client->fd);
 		// then we close (release resources)
@@ -118,7 +119,8 @@ void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* eve
 
 	if (rchkStringReaderIsDone(client->reader)) {
 		// register write handler for client
-		if (rchkEventLoopRegister(eventLoop, client->fd, ARCHKE_EVENT_LOOP_WRITE_EVENT, rchkHandleWriteEvent, client) < 0) {
+		RchkClientConfig config = { .data = client, .free = NULL };
+		if (rchkEventLoopRegister(eventLoop, client->fd, ARCHKE_EVENT_LOOP_WRITE_EVENT, rchkHandleWriteEvent, &config) < 0) {
 			logError("Client socket write event registration error");
 			rchkSocketShutdown(client->fd);
 			rchkEventLoopUnregister(eventLoop, client->fd);
@@ -167,7 +169,8 @@ void rchkHandleAcceptEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* e
 	client->sent = 0;
 
 	// register read handler for new client
-	if (rchkEventLoopRegister(eventLoop, clientSocketFd, ARCHKE_EVENT_LOOP_READ_EVENT, rchkHandleReadEvent, client) < 0) {
+	RchkClientConfig config = { .data = client, .free = NULL };
+	if (rchkEventLoopRegister(eventLoop, clientSocketFd, ARCHKE_EVENT_LOOP_READ_EVENT, rchkHandleReadEvent, &config) < 0) {
 		free(reader);
 		free(client);
 		rchkSocketClose(clientSocketFd);

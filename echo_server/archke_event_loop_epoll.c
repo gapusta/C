@@ -40,6 +40,7 @@ RchkEventLoop* rchkEventLoopNew(int setsize) {
         eventLoop->events[i].readEventHandle = NULL;
         eventLoop->events[i].writeEventHandle = NULL;
         eventLoop->events[i].clientData = NULL;
+        eventLoop->events[i].freeClientData = NULL;
     }
 
     return eventLoop;
@@ -52,7 +53,7 @@ err:
     return NULL;
 }
 
-int rchkEventLoopRegister(RchkEventLoop* eventLoop, int fd, int mask, rchkHandleEvent* proc, void* clientData) {
+int rchkEventLoopRegister(RchkEventLoop* eventLoop, int fd, int mask, rchkHandleEvent* proc, RchkClientConfig* config) {
     // 1. init epoll
     int epollMask = 0;
     if (mask & ARCHKE_EVENT_LOOP_READ_EVENT) epollMask |= EPOLLIN;
@@ -75,7 +76,8 @@ int rchkEventLoopRegister(RchkEventLoop* eventLoop, int fd, int mask, rchkHandle
     event->mask = mask;
     if (mask & ARCHKE_EVENT_LOOP_READ_EVENT) { event->readEventHandle = proc; }
     if (mask & ARCHKE_EVENT_LOOP_WRITE_EVENT) { event->writeEventHandle = proc; }
-    event->clientData = clientData;
+    event->clientData = config->data;
+    event->freeClientData = config->free;
 
     return 0;
 }
@@ -88,6 +90,7 @@ void rchkEventLoopUnregister(RchkEventLoop* eventLoop, int fd) {
     event->readEventHandle = NULL;
     event->writeEventHandle = NULL;
     event->clientData = NULL;
+    event->freeClientData = NULL;
 }
 
 int rchkEventLoopMain(RchkEventLoop* eventLoop) {
@@ -118,6 +121,15 @@ int rchkEventLoopMain(RchkEventLoop* eventLoop) {
 void rchkEventLoopFree(RchkEventLoop* eventLoop) {
     close(eventLoop->fd);
     free(eventLoop->apiData);
+
+    for (int i=0; i<eventLoop->setsize; i++) {
+        RchkEvent* event = &eventLoop->events[i];
+
+        if (event->clientData != NULL && event->freeClientData != NULL) {
+            event->freeClientData(event->clientData);
+        }
+    }
+
     free(eventLoop->events); // TODO: How to free 'clientData'?
     free(eventLoop);
 }

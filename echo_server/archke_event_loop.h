@@ -9,12 +9,19 @@ struct RchkEventLoop;
 struct RchkEvent;
 
 typedef void rchkHandleEvent(struct RchkEventLoop* eventLoop, int fd, struct RchkEvent* event, void* clientData);
+typedef void freeClientData(void* clientData);
+
+typedef struct RchkClientConfig {
+    void* data;
+    freeClientData* free;
+} RchkClientConfig;
 
 typedef struct RchkEvent {
     int mask;
     rchkHandleEvent* readEventHandle;
     rchkHandleEvent* writeEventHandle;
     void* clientData;
+    freeClientData* freeClientData;
 } RchkEvent;
 
 typedef struct RchkEventLoop {
@@ -25,7 +32,7 @@ typedef struct RchkEventLoop {
 } RchkEventLoop;
 
 RchkEventLoop* rchkEventLoopNew(int setsize);
-int  rchkEventLoopRegister(RchkEventLoop* eventLoop, int fd, int mask, rchkHandleEvent* proc, void* clientData);
+int  rchkEventLoopRegister(RchkEventLoop* eventLoop, int fd, int mask, rchkHandleEvent* proc, RchkClientConfig* config);
 int  rchkEventLoopMain(RchkEventLoop* eventLoop); // main event loop
 void rchkEventLoopUnregister(RchkEventLoop* eventLoop, int fd);
 void rchkEventLoopFree(RchkEventLoop* eventLoop);
