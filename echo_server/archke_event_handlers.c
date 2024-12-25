@@ -2,56 +2,67 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
 #include "archke_socket.h"
 #include "archke_event_loop.h"
 #include "archke_event_handlers.h"
-#include "archke_utils.c"
 #include "archke_logs.h"
 
+#define ARCHKE_WRITE_MAX_OUTPUTS 3
+
+// TODO: Test this function
 void rchkHandleWriteEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* event, void* clientData) {
-	int chunk_size = 256;
-	char chunk[chunk_size];
 	Client* client = (Client*) clientData;
+
+	char* prefix = "+";
+	int prefixSize = strlen(prefix);
+
+	char* suffix = "\r\n";
+	int suffixSize = strlen(suffix);
+
 	char* payload = rchkStringReaderData(client->reader);
-	int str_size = rchkStringReaderDataSize(client->reader);
-	int occupied = 0;
-	int prefix_size = 0;
-	int payload_size = 0;
-	int suffix_size = 0;
+	int payloadSize = rchkStringReaderDataSize(client->reader);
+	
+	int outputs = 0;
+	struct iovec io[ARCHKE_WRITE_MAX_OUTPUTS];
 
-	// 1. compute and set message prefix if needed
-	if (client->sent < 1) {
-		chunk[occupied++] = '+';
-		prefix_size = 1;
+	if (client->sent < prefixSize) {
+		int sentSize = client->sent;
+
+		io[outputs].iov_base = prefix + sentSize;
+		io[outputs].iov_len = prefixSize - sentSize;
+		outputs++;
 	}
 
-	// 2. copy message part to buffer
-	int remaining = str_size - client->sent;
-	int chunk_available = chunk_size - prefix_size;
+	if (client->sent < prefixSize + payloadSize) {
+		int sentSize = 0; 
+		
+		if (client->sent > prefixSize) {
+			sentSize = client->sent - prefixSize;
+		}
 
-	payload_size = min(remaining, chunk_available);
-
-	for (int pidx=0; pidx < payload_size; pidx++, occupied++) {
-		chunk[occupied] = payload[client->sent + pidx];
+		io[outputs].iov_base = payload + sentSize;
+		io[outputs].iov_len = payloadSize - sentSize;
+		outputs++;
 	}
 
-	// 3. deal with '\r'
-	if (client->sent < str_size + 2 && occupied < chunk_size) {
-		chunk[occupied++] = '\r';
-		suffix_size++;
+	if (client->sent < prefixSize + payloadSize + suffixSize) {
+		int sentSize = 0; 
+		
+		if (client->sent > prefixSize + payloadSize) {
+			sentSize = client->sent - (prefixSize + payloadSize);
+		}
+
+		io[outputs].iov_base = suffix + sentSize;
+		io[outputs].iov_len = suffixSize - sentSize;
+		outputs++;
 	}
 
-	// 4. deal with '\n'
-	if (client->sent < str_size + 3 && occupied < chunk_size) {
-		chunk[occupied++] = '\n';
-		suffix_size++;
-	}
-
-	// send data
-	int nbytes = rchkSocketWrite(client->fd, chunk, prefix_size + payload_size + suffix_size);
+	// TODO: encapsulate away the call to writev() into archke_socket.c
+	int nbytes = writev(client->fd, io, outputs);
 	if (nbytes < 0) {
 		logError("Write to client failed");
 		// close connections (exactly how its handled in Redis. See networking.c -> (freeClient(c) -> unlinkClient(c)))
@@ -65,12 +76,12 @@ void rchkHandleWriteEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* ev
 	}
 
 	client->sent = client->sent + nbytes;
-	
-	if (client->sent == str_size + 3) {
-		// all the data has been sent
+
+	// check if all the data has been sent
+	if (client->sent == prefixSize + payloadSize + suffixSize) {
 		client->sent = 0;
 		rchkStringReaderClear(client->reader);
-		// register read handler for new client
+		// register read handler for client
 		RchkClientConfig config = { .data = client, .free = NULL };
 		if (rchkEventLoopRegister(eventLoop, client->fd, ARCHKE_EVENT_LOOP_READ_EVENT, rchkHandleReadEvent, &config) < 0) {
 			logError("Client socket read event registration error");
@@ -84,11 +95,13 @@ void rchkHandleWriteEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* ev
 	}
 }
 
+#undef ARCHKE_WRITE_MAX_OUTPUTS
+
 void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* event, void* clientData) {
-	char chunk[256];
+	char buffer[256];
 	Client* client = (Client*) clientData;
 	
-	int nbytes = rchkSocketRead(client->fd, chunk, sizeof(chunk));
+	int nbytes = rchkSocketRead(client->fd, buffer, sizeof(buffer));
 
 	if (nbytes < 0) {
 		logError("Read from client failed");
@@ -115,7 +128,7 @@ void rchkHandleReadEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* eve
 		return;
 	}
 
-	rchkStringReaderProcess(client->reader, chunk, nbytes);
+	rchkStringReaderProcess(client->reader, buffer, nbytes);
 
 	if (rchkStringReaderIsDone(client->reader)) {
 		// register write handler for client
