@@ -4,6 +4,7 @@
 #include "archke_event_loop.h"
 #include "archke_simple_string_reader.h"
 
+// TODO: refactor Client 
 typedef struct Client {
 	int fd;
 	RchkStringReader* reader;
