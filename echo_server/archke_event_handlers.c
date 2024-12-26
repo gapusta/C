@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/uio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -27,13 +26,13 @@ void rchkHandleWriteEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* ev
 	int payloadSize = rchkStringReaderDataSize(client->reader);
 	
 	int outputs = 0;
-	struct iovec io[ARCHKE_WRITE_MAX_OUTPUTS];
+	RchkSocketBuffer buffs[ARCHKE_WRITE_MAX_OUTPUTS];
 
 	if (client->sent < prefixSize) {
 		int sentSize = client->sent;
 
-		io[outputs].iov_base = prefix + sentSize;
-		io[outputs].iov_len = prefixSize - sentSize;
+		buffs[outputs].buffer = prefix + sentSize;
+		buffs[outputs].size = prefixSize - sentSize;
 		outputs++;
 	}
 
@@ -44,8 +43,8 @@ void rchkHandleWriteEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* ev
 			sentSize = client->sent - prefixSize;
 		}
 
-		io[outputs].iov_base = payload + sentSize;
-		io[outputs].iov_len = payloadSize - sentSize;
+		buffs[outputs].buffer = payload + sentSize;
+		buffs[outputs].size = payloadSize - sentSize;
 		outputs++;
 	}
 
@@ -56,13 +55,12 @@ void rchkHandleWriteEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* ev
 			sentSize = client->sent - (prefixSize + payloadSize);
 		}
 
-		io[outputs].iov_base = suffix + sentSize;
-		io[outputs].iov_len = suffixSize - sentSize;
+		buffs[outputs].buffer = suffix + sentSize;
+		buffs[outputs].size = suffixSize - sentSize;
 		outputs++;
 	}
 
-	// TODO: encapsulate away the call to writev() into archke_socket.c
-	int nbytes = writev(client->fd, io, outputs);
+	int nbytes = rchkSocketWritev(client->fd, buffs, outputs);
 	if (nbytes < 0) {
 		logError("Write to client failed");
 		// close connections (exactly how its handled in Redis. See networking.c -> (freeClient(c) -> unlinkClient(c)))
@@ -182,7 +180,7 @@ void rchkHandleAcceptEvent(RchkEventLoop* eventLoop, int fd, struct RchkEvent* e
 	client->sent = 0;
 
 	// register read handler for new client
-	RchkClientConfig config = { .data = client, .free = NULL };
+	RchkClientConfig config = { .data = client, .free = NULL }; // TODO: implement 'free()'
 	if (rchkEventLoopRegister(eventLoop, clientSocketFd, ARCHKE_EVENT_LOOP_READ_EVENT, rchkHandleReadEvent, &config) < 0) {
 		free(reader);
 		free(client);

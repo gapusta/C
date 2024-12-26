@@ -130,7 +130,7 @@ void rchkEventLoopFree(RchkEventLoop* eventLoop) {
         }
     }
 
-    free(eventLoop->events); // TODO: How to free 'clientData'?
+    free(eventLoop->events);
     free(eventLoop);
 }
 

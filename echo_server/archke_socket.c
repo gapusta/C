@@ -1,6 +1,7 @@
 #include <sys/socket.h> 
 #include <netinet/in.h>
 #include <fcntl.h>
+#include <sys/uio.h>
 #include <stdio.h>
 #include <unistd.h>
 #include "archke_socket.h"
@@ -30,6 +31,23 @@ int rchkSocketRead(int socketFd, char* buffer, int bufferSize) {
 
 int rchkSocketWrite(int socketFd, char* buffer, int n) {
 	ssize_t nbytes = write(socketFd, buffer, n);
+	if (nbytes < 0) {
+		return -1;
+	}
+
+	return nbytes;
+}
+
+int rchkSocketWritev(int socketFd, RchkSocketBuffer* buffers, int n) {
+	struct iovec io[n];
+
+	for(int i=0; i<n; i++) {
+		io[i].iov_base = buffers[i].buffer;
+		io[i].iov_len = buffers[i].size;
+	}
+
+	ssize_t nbytes = writev(socketFd, io, n);
+
 	if (nbytes < 0) {
 		return -1;
 	}
